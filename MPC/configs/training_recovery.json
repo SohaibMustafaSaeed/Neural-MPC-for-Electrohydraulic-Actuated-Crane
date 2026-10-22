@@ -1,0 +1,105 @@
+{
+  "dynamics": {
+    "GRU": {
+      "source": "GRU/gru.py",
+      "source_sha256": "f313229b93102c3b76b31b1f75ee3eca621854adba69b3932df429f81ce483da",
+      "unchanged_architecture_training_native_functions": [
+        "ModelConfig",
+        "EncodedResidualGRU",
+        "export_weights",
+        "native_encode",
+        "sigmoid",
+        "native_step",
+        "native_chunk",
+        "physical_step",
+        "load_bundle",
+        "batch",
+        "state_loss_weights",
+        "weighted_mse",
+        "sample_horizon",
+        "train_batch",
+        "native_validation",
+        "burn_in_batch"
+      ],
+      "full_training_executed": false,
+      "training_smoke_executed": true
+    },
+    "LSTM": {
+      "source": "LSTM/LSTM.py",
+      "source_sha256": "0f14b18e89579434590758e1ec45646b7e7a03517f47f63a58150219a02be890",
+      "unchanged_architecture_training_native_functions": [
+        "ModelConfig",
+        "EncodedResidualLSTM",
+        "export_weights",
+        "native_encode",
+        "sigmoid",
+        "native_step",
+        "native_chunk",
+        "physical_step",
+        "load_bundle",
+        "batch",
+        "state_loss_weights",
+        "weighted_mse",
+        "sample_horizon",
+        "train_batch",
+        "native_validation",
+        "burn_in_batch"
+      ],
+      "full_training_executed": false,
+      "training_smoke_executed": true
+    },
+    "Transformer": {
+      "source": "Transformer/transformer.py",
+      "source_sha256": "2bd3766146edadc53ddec2aacd1646db0ff59b2a873f14e2e257e996dd35db46",
+      "unchanged_architecture_training_native_functions": [
+        "ModelConfig",
+        "CausalResidualTransformer",
+        "export_weights",
+        "compute_budget",
+        "native_encode",
+        "normalize_row",
+        "native_step",
+        "native_chunk",
+        "physical_step",
+        "load_bundle",
+        "batch",
+        "state_loss_weights",
+        "weighted_mse",
+        "sample_horizon",
+        "train_batch",
+        "native_validation",
+        "burn_in_batch"
+      ],
+      "full_training_executed": false,
+      "training_smoke_executed": true
+    },
+    "Compact": {
+      "source": "Compact recurrent/trainCompactLatent.py",
+      "source_sha256": "e3c6488a8a54c74779c3cb764495e0c6a7ef57c606a8bb3ed4d24d078af887a0",
+      "unchanged_architecture_training_native_functions": [
+        "ModelConfig",
+        "CompactLatent",
+        "export_weights",
+        "native_encode",
+        "native_step",
+        "native_chunk",
+        "physical_step",
+        "load_bundle",
+        "batch",
+        "state_loss_weights",
+        "weighted_mse",
+        "sample_horizon",
+        "train_batch",
+        "native_validation",
+        "burn_in_batch"
+      ],
+      "full_training_executed": true,
+      "training_smoke_executed": true
+    }
+  },
+  "preprocessing_source": "Data Preprocessing/preprocess_dataset.py",
+  "preprocessing_kernels_AST_identical": true,
+  "policy_source": "common/distill400.py:feature,generate,train",
+  "teacher_warm_start": "previous optimized second move repeated twice; no canonical replacement",
+  "policy_training": "Adam .001 wd1e-5; MSE; batch512; gradclip5; max240; patience40; validation improvement>1e-7; historical float32 feature scaler"
+}

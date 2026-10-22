@@ -1,0 +1,9 @@
+{
+  "Results/GRU/checkpoints/gru_original.pt": "b5172ca20e4c221f366590e6a402ff87f0c4fcc3fe0a6c2a3b2524f1a2a6c7a6",
+  "Results/LSTM/checkpoints/lstm_original.pt": "f4c540937bb66d3e1fc3db1c56fe4ecc7c41ce694c423732d4e277a61905132b",
+  "Results/Transformer/checkpoints/transformer_original.pt": "fd1922c9d5df2c9daf0fb711cb3e7fd47a35bd3bd05071dbc4d6ca1be3bf084f",
+  "Results/Compact/checkpoints/compact_original.pt": "4b1d9c8665284ad24eb4bf17bad7a61e7269981a7cfcb01c46792d88c2fe7105",
+  "MPC/checkpoints/compact_norm_integrated_s44_dt1000.pt": "590028f9aa7c1e660f4a09ec4b7563619ddcb9ebcee34eb694b589d33dc942f5",
+  "MPC/checkpoints/scaler.json": "82116ac3a9242c5b9cc8b3c4061bbff74e077c42d24c5b001f5396e9dc86c364",
+  "Neural_MPC/checkpoints/wide_s44.pt": "ef1a613f502f923d229813b5c0393fc4d9cb7ce82159068bab727fb1d0152230"
+}

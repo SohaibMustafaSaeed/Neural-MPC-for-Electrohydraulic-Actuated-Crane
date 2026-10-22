@@ -1,0 +1,8 @@
+{
+  "path": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\final full state codes\\mpc_400ms_neural_distillation_final\\demonstrations",
+  "reused": true,
+  "samples": 32288,
+  "smoke_only": false,
+  "teacher": "Original400ms maxiter5; historical shifted second move",
+  "Test_used": false
+}

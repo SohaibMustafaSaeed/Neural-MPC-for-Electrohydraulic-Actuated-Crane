@@ -1,0 +1,58 @@
+{
+  "settings": {
+    "control_interval_s": 0.1,
+    "prediction_interval_s": 0.01,
+    "horizon_steps": 40,
+    "move_blocks": 2,
+    "predictor_variant": "norm_integrated",
+    "maxiter": 5,
+    "ftol": 1e-08,
+    "finite_difference_step": 0.03,
+    "command_rate_limit_V_per_s": null,
+    "pressure_constraints": false,
+    "independent_plant_adapter": null,
+    "tracking_space": "cartesian",
+    "cost_weights": {
+      "position": 1.0,
+      "joint_angles": 0.0,
+      "angular_velocity": 0.1,
+      "effort": 0.0001,
+      "command_change": 0.001,
+      "terminal_position": 5.0
+    },
+    "position_scale_m": 0.01,
+    "threads": 1,
+    "correct_command_history": true
+  },
+  "geometry": {
+    "lift_length": 2.8861494977309152,
+    "jib_length": 2.0496950992769634,
+    "jib_angle_mode": "absolute",
+    "base_x": -0.09,
+    "base_z": 1.4261,
+    "lift_offset_deg": 0.0,
+    "jib_offset_deg": 0.0,
+    "lift_sign": 1.0,
+    "jib_sign": 1.0,
+    "lift_vector": [
+      2.886080943,
+      0.019892554
+    ],
+    "jib_vector": [
+      2.035,
+      0.245
+    ]
+  },
+  "bounds": {
+    "low": [
+      -0.9999999723274773,
+      -0.9999999978489263
+    ],
+    "high": [
+      1.0000032089789734,
+      1.00000154537254
+    ],
+    "meaning": "Observed data envelope, not safety-certified limits"
+  },
+  "initialization": "H0"
+}

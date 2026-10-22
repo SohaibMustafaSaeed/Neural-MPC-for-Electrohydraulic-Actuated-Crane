@@ -1,0 +1,14 @@
+{
+  "raw_sample_interval_s": 1e-05,
+  "startup_trim_s": 18,
+  "smooth_command_window": 51,
+  "smooth_order": 3,
+  "state_columns": "MPC/mpc.py",
+  "raw_structure": [
+    "Train/Simulation_Output_00.csv through Simulation_Output_42.csv",
+    "Test/Simulation_Output_43.csv through Simulation_Output_53.csv"
+  ],
+  "default_split": "development-validation",
+  "data_root_environment": "PATU_DATA_ROOT",
+  "prepared_root_environment": "PATU_PREPARED_ROOT"
+}

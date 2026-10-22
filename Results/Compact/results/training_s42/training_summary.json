@@ -1,0 +1,10 @@
+{
+  "model": "compact",
+  "checkpoint": "checkpoints\\compact_retrained_s42.pt",
+  "seed": 42,
+  "epochs": 60,
+  "smoke_only": false,
+  "training_seconds": 266.6361799000297,
+  "checkpoint_reloaded": true,
+  "normalization": "Saved checkpoint scaler; Train prefix only"
+}

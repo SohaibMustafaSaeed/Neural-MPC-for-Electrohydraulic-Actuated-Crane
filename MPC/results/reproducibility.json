@@ -1,0 +1,24 @@
+{
+  "policy_retrained_weights_bit_exact": true,
+  "policy_retrained_scalers_bit_exact": true,
+  "policy_retrained_epochs": 72,
+  "policy_retrained_validation_MSE": 0.0920972153544426,
+  "reused_demonstration_recordings_verified": 43,
+  "fresh_teacher_smoke_matches_historical": true,
+  "teacher_samples": 32288,
+  "all_22_state_metrics_all_11_Test_recordings_verified": true,
+  "Compact_full_training": {
+    "model": "compact",
+    "checkpoint": "checkpoints\\compact_retrained_s42.pt",
+    "seed": 42,
+    "epochs": 60,
+    "smoke_only": false,
+    "training_seconds": 266.6361799000297,
+    "checkpoint_reloaded": true,
+    "normalization": "Saved checkpoint scaler; Train prefix only"
+  },
+  "dynamics_other_full_training": "Not run: GRU/LSTM/Transformer complete3epoch reduced curriculum smoke tests only; no full60epoch claim",
+  "full_teacher_corpus_regenerated": false,
+  "fresh_teacher_generation_smoke_samples": 4,
+  "all_frozen_model_hashes_unchanged": true
+}

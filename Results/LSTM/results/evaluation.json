@@ -1,0 +1,13 @@
+{
+  "model": "lstm",
+  "checkpoint_sha256": "f4c540937bb66d3e1fc3db1c56fe4ecc7c41ce694c423732d4e277a61905132b",
+  "checkpoint": "lstm_original.pt",
+  "parameters": 4946,
+  "dataset": "11 historically reused Test recordings",
+  "smoke_only": false,
+  "horizon_steps": 50,
+  "horizon_s": 0.0005,
+  "origin_stride": 10000,
+  "aggregation": "Equal recording metrics per state, then equal state mean; undefined R2 omitted",
+  "timing_scope": "native_chunk only; initial encoding/buffers/JIT/I-O/metrics excluded"
+}

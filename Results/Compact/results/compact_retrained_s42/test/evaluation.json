@@ -1,0 +1,13 @@
+{
+  "model": "compact",
+  "checkpoint_sha256": "ea6190f2a214d6a4abac3f5961a8cf0d77cd351c9fbec650da701c44a283426d",
+  "checkpoint": "compact_retrained_s42.pt",
+  "parameters": 4246,
+  "dataset": "11 historically reused Test recordings",
+  "smoke_only": false,
+  "horizon_steps": 50,
+  "horizon_s": 0.0005,
+  "origin_stride": 10000,
+  "aggregation": "Equal recording metrics per state, then equal state mean; undefined R2 omitted",
+  "timing_scope": "native_chunk only; initial encoding/buffers/JIT/I-O/metrics excluded"
+}

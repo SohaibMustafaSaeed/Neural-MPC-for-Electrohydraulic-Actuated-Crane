@@ -1,0 +1,13 @@
+{
+  "model": "gru",
+  "checkpoint_sha256": "b5172ca20e4c221f366590e6a402ff87f0c4fcc3fe0a6c2a3b2524f1a2a6c7a6",
+  "checkpoint": "gru_original.pt",
+  "parameters": 4098,
+  "dataset": "11 historically reused Test recordings",
+  "smoke_only": false,
+  "horizon_steps": 50,
+  "horizon_s": 0.0005,
+  "origin_stride": 10000,
+  "aggregation": "Equal recording metrics per state, then equal state mean; undefined R2 omitted",
+  "timing_scope": "native_chunk only; initial encoding/buffers/JIT/I-O/metrics excluded"
+}

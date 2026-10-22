@@ -1,0 +1,13 @@
+{
+  "model": "transformer",
+  "checkpoint_sha256": "fd1922c9d5df2c9daf0fb711cb3e7fd47a35bd3bd05071dbc4d6ca1be3bf084f",
+  "checkpoint": "transformer_original.pt",
+  "parameters": 4710,
+  "dataset": "11 historically reused Test recordings",
+  "smoke_only": false,
+  "horizon_steps": 50,
+  "horizon_s": 0.0005,
+  "origin_stride": 10000,
+  "aggregation": "Equal recording metrics per state, then equal state mean; undefined R2 omitted",
+  "timing_scope": "native_chunk only; initial encoding/buffers/JIT/I-O/metrics excluded"
+}

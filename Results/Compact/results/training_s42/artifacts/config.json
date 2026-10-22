@@ -1,0 +1,412 @@
+{
+  "format": "compact_latent_recurrent_numba_24x22_v1",
+  "model": {
+    "latent_dim": 8,
+    "hidden": 32
+  },
+  "training_manifest": [
+    {
+      "file": "training\\Simulation_Output_00.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_00.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_01.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_01.csv",
+      "rows": 1200000,
+      "train_rows": 1080000,
+      "validation_start": 1080000,
+      "validation_rows": 120000
+    },
+    {
+      "file": "training\\Simulation_Output_02.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_02.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_03.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_03.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_04.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_04.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_05.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_05.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_06.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_06.csv",
+      "rows": 7200000,
+      "train_rows": 6480000,
+      "validation_start": 6480000,
+      "validation_rows": 720000
+    },
+    {
+      "file": "training\\Simulation_Output_07.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_07.csv",
+      "rows": 7200000,
+      "train_rows": 6480000,
+      "validation_start": 6480000,
+      "validation_rows": 720000
+    },
+    {
+      "file": "training\\Simulation_Output_08.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_08.csv",
+      "rows": 5200000,
+      "train_rows": 4680000,
+      "validation_start": 4680000,
+      "validation_rows": 520000
+    },
+    {
+      "file": "training\\Simulation_Output_09.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_09.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_10.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_10.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_11.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_11.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_12.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_12.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_13.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_13.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_14.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_14.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_15.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_15.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_16.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_16.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_17.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_17.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_18.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_18.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_19.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_19.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_20.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_20.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_21.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_21.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_22.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_22.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_23.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_23.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_24.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_24.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_25.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_25.csv",
+      "rows": 4200000,
+      "train_rows": 3780000,
+      "validation_start": 3780000,
+      "validation_rows": 420000
+    },
+    {
+      "file": "training\\Simulation_Output_26.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_26.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_27.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_27.csv",
+      "rows": 6200000,
+      "train_rows": 5580000,
+      "validation_start": 5580000,
+      "validation_rows": 620000
+    },
+    {
+      "file": "training\\Simulation_Output_28.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_28.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_29.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_29.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_30.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_30.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_31.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_31.csv",
+      "rows": 4200000,
+      "train_rows": 3780000,
+      "validation_start": 3780000,
+      "validation_rows": 420000
+    },
+    {
+      "file": "training\\Simulation_Output_32.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_32.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_33.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_33.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_34.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_34.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_35.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_35.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_36.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_36.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_37.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_37.csv",
+      "rows": 4200000,
+      "train_rows": 3780000,
+      "validation_start": 3780000,
+      "validation_rows": 420000
+    },
+    {
+      "file": "training\\Simulation_Output_38.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_38.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_39.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_39.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_40.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_40.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_41.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_41.csv",
+      "rows": 8200001,
+      "train_rows": 7380000,
+      "validation_start": 7380000,
+      "validation_rows": 820001
+    },
+    {
+      "file": "training\\Simulation_Output_42.npy",
+      "source_csv": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\Train\\Simulation_Output_42.csv",
+      "rows": 6200000,
+      "train_rows": 5580000,
+      "validation_start": 5580000,
+      "validation_rows": 620000
+    }
+  ],
+  "scaler_fitted_rows": 292140000,
+  "delta_scale_training_pairs": 430000,
+  "loss_weights": {
+    "speedref[rad/s]": 1.0,
+    "speedpmsm[rad/s]": 1.0,
+    "iqref[A]": 1.0,
+    "udref[V]": 1.0,
+    "uqref[V]": 1.0,
+    "id[A]": 1.0,
+    "iq[A]": 1.0,
+    "psid[Wb]": 1.0,
+    "psiq[Wb]": 1.0,
+    "pumppressure[Pa]": 1.0,
+    "plinepistonlift[Pa]": 1.0,
+    "plinerodlift[Pa]": 1.0,
+    "ppistonsidelift[Pa]": 1.0,
+    "prodsidelift[Pa]": 1.0,
+    "thetalift[rad]": 4.0,
+    "plinepistonjib[Pa]": 1.0,
+    "plinerodjib[Pa]": 1.0,
+    "ppistonjib[Pa]": 1.0,
+    "prodjib[Pa]": 1.0,
+    "thetajib[rad]": 4.0,
+    "thetaliftdot[rad/s]": 4.0,
+    "thetajibdot[rad/s]": 4.0
+  },
+  "checkpoint_selection": "weighted normalized MSE at 500 steps",
+  "command_alignment": "u[t],x[t],x[t-1] -> x[t+1]",
+  "arguments": {
+    "dataset_dir": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\final full state codes\\prepared",
+    "output_dir": "C:\\Data\\Nitin Project\\Dataset1\\datafinal\\Imotiondata\\CSV\\.patu_training_rebuild\\PATU_Crane_Research\\Results\\Compact\\results\\training_s42\\artifacts",
+    "epochs": 60,
+    "overwrite": false,
+    "batch_size": 16,
+    "steps_per_epoch": 20,
+    "hidden": 32,
+    "latent_dim": 8,
+    "angle_weight": 4.0,
+    "velocity_weight": 4.0,
+    "medium_horizon": 500,
+    "medium_probability": 0.6,
+    "long_probability": 0.2,
+    "selection_horizon": 500,
+    "learning_rate": 0.001,
+    "warmup_epochs": 2,
+    "short_horizon": 100,
+    "long_horizon": 1000,
+    "burn_in_steps": 10000,
+    "grad_block": 50,
+    "val_horizons": [
+      100,
+      500,
+      1000
+    ],
+    "val_windows": 4,
+    "scale_samples_per_file": 10000,
+    "threads": 2,
+    "seed": 42
+  }
+}

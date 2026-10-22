@@ -1,0 +1,3 @@
+model,scope,NRMSE_train_std,R2,parameters
+lstm,one_step,5.413840016573744e-06,0.9999999998217571,4946
+lstm,recursive_horizon,0.0001531133674419658,0.999999847802039,4946
