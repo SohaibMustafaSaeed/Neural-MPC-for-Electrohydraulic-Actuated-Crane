@@ -66,47 +66,336 @@ The22physical outputs, in original order, are:
 
 Joystick inputs are `ulift[V]` and `ujib[V]`, at original input indices0and16. The original full24-column order is defined in every preprocess.py and MPC/mpc.py.
 
-## Train the four dynamics models
+
+## 2. Stage I — Neural Dynamics Modelling
+
+The first stage of this research focuses on developing neural networks to predict the dynamic behaviour of the PATU forestry crane.
+
+Four neural architectures were investigated:
+
+1. Gated Recurrent Unit (GRU)
+2. Long Short-Term Memory (LSTM)
+3. Causal Transformer
+4. Compact Recurrent Model
+
+All four models use the same crane measurements and are trained to predict changes in the **22 physical states** under the applied lift and jib joystick commands.
+
+The aim is to compare their prediction accuracy, computational efficiency, and ability to predict crane movement recursively.
+
+### 2.1 Dataset and Preprocessing
+
+The original dataset consists of 54 crane recordings containing electrical, hydraulic, and mechanical measurements.
+
+Each recording contains:
+
+- **22 physical states:** Including electrical signals, hydraulic pressures, lift and jib angles, and angular velocities.
+- **2 joystick commands:** One controlling the lift boom and another controlling the jib boom.
+
+The original sampling interval is **10 microseconds (10 µs)**, corresponding to 100,000 samples per second.
+
+Before training, the data is prepared using the following steps:
+
+1. **Startup removal:** The first 18 seconds of each recording are removed to exclude initial startup behaviour.
+2. **Command smoothing:** A third-order Savitzky–Golay filter with a 51-sample window is applied to the joystick commands to reduce noise.
+3. **Signal alignment:** The physical states and joystick commands are aligned so that the models receive the correct information when predicting the next state.
+4. **Normalization:** The signals are normalized using parameters obtained from the training data. The same saved parameters are used during validation and testing.
+5. **Dataset separation:** Training, validation, and Test recordings are kept separate to prevent future information from entering the training process.
+
+The preprocessing also calculates changes between consecutive time steps, allowing the models to observe how the crane is moving rather than relying only on its current condition.
+
+### 2.2 Input Feature Construction
+
+Each model receives **48 input features**, constructed from the 22 physical states and two joystick commands.
+
+The features are divided into two groups:
+
+| Input Information | Features | Description |
+|---|---:|---|
+| Current physical states | 22 | Current electrical, hydraulic, and mechanical conditions |
+| Current joystick commands | 2 | Current lift and jib control inputs |
+| Changes in physical states | 22 | Difference between the current and previous physical states |
+| Changes in joystick commands | 2 | Difference between the current and previous joystick commands |
+| **Total** | **48** | **Complete model input** |
+
+The first 24 features describe the crane's current condition and applied commands.
+
+The remaining 24 features describe how those values have changed since the previous time step.
+
+For example, the current lift angle tells the model where the lift boom is pointing, while the change in lift angle provides information about its recent movement.
+
+Similarly, the current joystick command tells the model what input is being applied, while the change in joystick command indicates whether the operator has recently increased, decreased, or reversed that input.
+
+These 48 features provide both current-state and recent-motion information.
+
+All four models use these prepared features to predict the changes in the next **22 physical states**.
+
+The predicted state changes are scaled using the saved training-derived increment scales and added to the current states to obtain the next predicted crane state.
+
+The two joystick commands remain model inputs and are not included among the 22 predicted physical states.
+
+### 2.3 Neural Network Architectures
+
+The four models use different architectures to process the same input information.
+
+#### GRU — 4,098 Parameters
+
+The GRU receives the 48 prepared input features, which are first passed through an encoder that reduces them to **12 features**.
+
+These encoded features are processed by a GRU recurrent unit containing **16 hidden units**.
+
+The GRU maintains an internal memory of previous crane behaviour and updates it as new input information becomes available.
+
+The resulting information passes through a **16-unit decoding layer**, which predicts changes in all 22 physical states.
+
+A direct linear skip connection from the original input features also contributes to the state-change prediction.
+
+This allows the model to use both the information stored in its recurrent memory and the current crane measurements.
+
+#### LSTM — 4,946 Parameters
+
+The LSTM uses the same 48 input features and a **12-feature encoder**.
+
+The encoded information is processed by an LSTM recurrent unit containing **16 hidden units**.
+
+Unlike the GRU, the LSTM maintains both hidden memory and cell memory. These allow it to retain useful information about previous crane movements while processing new inputs.
+
+The recurrent output passes through a **16-unit decoding layer** to predict changes in the 22 physical states.
+
+A direct linear skip connection from the input features is also included.
+
+The main difference from GRU is the internal memory mechanism used to capture time-dependent crane behaviour.
+
+#### Causal Transformer — 4,710 Parameters
+
+The Transformer receives the same 48 input features and converts them into **16-dimensional encoded representations**.
+
+It processes a history of up to **64 time steps** using one Transformer layer with:
+
+- 2 attention heads.
+- 16-dimensional model representations.
+- A 32-unit feedforward layer.
+- Causal attention.
+- No dropout in the selected configuration.
+
+The attention mechanism allows the model to identify relationships between different time steps in the available input history.
+
+Causal attention ensures that the model cannot use future physical states when predicting an earlier state.
+
+The processed information passes through a **16-unit decoding layer**, which predicts changes in the 22 physical states.
+
+A direct linear skip connection from the input features also contributes to the output.
+
+#### Original Compact Recurrent Model — 4,246 Parameters
+
+The Compact model uses a custom recurrent architecture designed to provide accurate prediction with fewer parameters and lower computational cost.
+
+It receives the same 48 prepared input features.
+
+First, the model uses an encoder to represent the **22 physical states using 8 internal features**.
+
+These internal features are updated through the model's custom recurrent mechanism using the current input information and previous internal memory.
+
+The updated information is combined with the prepared inputs and processed through a **32-unit hidden layer**.
+
+A decoder predicts the changes in all 22 physical states.
+
+A direct linear skip connection also allows the original input features to contribute to the final prediction.
+
+The predicted state changes are scaled and added to the current physical states to obtain the next predicted state.
+
+The Compact architecture was designed to reduce model complexity while retaining the information required for recursive crane prediction.
+
+### 2.4 Architecture Comparison
+
+| Parameter | GRU | LSTM | Transformer | Compact |
+|---|---:|---:|---:|---:|
+| Input features | 48 | 48 | 48 | 48 |
+| Encoder dimension | 12 | 12 | 16 | 8 (physical-state encoder) |
+| Recurrent hidden units | 16 | 16 | — | Custom recurrent memory |
+| Attention heads | — | — | 2 | — |
+| Transformer layers | — | — | 1 | — |
+| Feedforward dimension | — | — | 32 | — |
+| Decoder/hidden dimension | 16 | 16 | 16 | 32 |
+| Predicted physical states | 22 | 22 | 22 | 22 |
+| Trainable parameters | 4,098 | 4,946 | 4,710 | 4,246 |
+
+All models predict physical-state changes rather than directly replacing the current state with an unrelated prediction.
+
+The original current-state information is retained when constructing the next predicted state.
+
+### 2.5 Model Training
+
+All four models were trained using the same general training procedure to provide a consistent comparison.
+
+Instead of training only on individual next-state predictions, the training process includes **recursive prediction**.
+
+During recursive prediction, the model's predicted physical states are fed back into the model to calculate later predictions.
+
+This allows the model to learn from the errors that accumulate when its own predictions are used repeatedly.
+
+#### Training Configuration
+
+| Training Parameter | Value |
+|---|---|
+| Original sampling interval | 10 µs |
+| Maximum training epochs | 60 |
+| Batch size | 16 |
+| Training steps per epoch | 20 |
+| Optimizer | AdamW |
+| Learning rate | 0.001 |
+| Weight decay | 0.000001 |
+| Gradient clipping | 1.0 |
+| Gradient blocks | 50 steps |
+| Initial warm-up | 2 epochs |
+| Warm-up prediction horizon | 5 steps |
+| Main training horizons | 100, 500, and 1,000 steps |
+| Horizon sampling probabilities | 20%, 60%, and 20% |
+| Maximum recursive burn-in | 10,000 steps |
+| Zero-prefix training cases | 25% |
+| Mechanical angle/velocity loss weight | 4 |
+| Other physical-state loss weight | 1 |
+| Original random seed | 42 |
+| Learning-rate scheduler | None |
+| Early stopping | None |
+
+#### Recursive Training Horizons
+
+After the initial warm-up, three recursive prediction horizons are used during training:
+
+| Prediction Steps | Physical Duration | Sampling Probability |
+|---|---:|---:|
+| 100 steps | 1 ms | 20% |
+| 500 steps | 5 ms | 60% |
+| 1,000 steps | 10 ms | 20% |
+
+This allows the networks to learn predictions over different short time intervals instead of focusing only on the next sample.
+
+The 500-step horizon is selected most frequently during training.
+
+#### Training Warm-up and Burn-in
+
+The first two epochs use short five-step predictions to initialize the learning process before longer recursive sequences are introduced.
+
+During the main training stage, historical information can also be processed through a recursive burn-in of up to 10,000 steps.
+
+This allows recurrent models to establish their internal memory before calculating the training loss.
+
+Some training cases use a zero-prefix configuration, allowing the models to learn under different memory initialization conditions.
+
+#### Training Loss
+
+The models are trained by comparing their predicted physical states with the recorded crane states.
+
+Prediction errors are calculated across the 22 states, with greater importance given to the four mechanical variables:
+
+- Lift angle.
+- Jib angle.
+- Lift angular velocity.
+- Jib angular velocity.
+
+These four variables receive a loss weight of **4**, while the remaining physical states receive a weight of **1**.
+
+This encourages the models to pay additional attention to mechanical movement, which is particularly important for subsequent crane trajectory prediction and control.
+
+State-change scaling is also calculated from training data using sampled consecutive-state differences. The original scaling procedure uses 10,000 sampled training-prefix pairs per recording and limits the resulting increment scales to the range from 0.00001 to 1.
+
+#### Model Selection
+
+Training runs for the configured maximum of 60 epochs.
+
+The best checkpoint is selected using a weighted **500-step recursive validation evaluation** across four fixed validation windows.
+
+The models are not selected using the Test recordings.
+
+The selected model checkpoint and its associated normalization parameters are saved for later evaluation.
+
+### 2.6 Training the Four Models
+
+Each neural model has its own `train.py` script, allowing it to be trained independently.
+
+The training scripts use the original CSV recordings and prepared data.
+
+Run GRU:
 
 ```powershell
 python Results/GRU/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --seed 42
+```
+
+Run LSTM:
+
+```powershell
 python Results/LSTM/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --seed 42
+```
+
+Run Transformer:
+
+```powershell
 python Results/Transformer/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --seed 42
+```
+
+Run Compact:
+
+```powershell
 python Results/Compact/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --seed 42
 ```
 
-Seed42 is the recorded original dynamics seed; `--seed44` is an explicitly different reproducibility run. GRU and LSTM retain latent12, memory16, decoder16 and a direct physical residual skip. Transformer retains width16, two heads, one layer, feedforward32, decoder16, causal history64 and dropout0. Original Compact retains latent8 and hidden32. Parameters are4098,4946,4710and4246respectively. Outputs are22state residuals added to the current normalized state with the original per-state increment scale.
+Seed 42 reproduces the original configured random seed. Other seeds can be used for additional training runs but may produce different model weights and prediction results.
 
-Recovered training settings are60epochs, batch16,20steps/epoch, AdamW lr0.001 and weight decay1e-6, gradient clip1, gradient blocks50, and two five-step warm-up epochs. There is **no historical LR scheduler or early stopping** in these dynamics trainers. After warm-up, horizons100/500/1000are sampled with probabilities20%/60%/20%. Historical recursive burn-in is up to10000steps, with25%zero-prefix cases. Mechanical angle/velocity loss weights are4, other states1. Best checkpoint selection uses weighted500-step native validation across four fixed windows. Delta scaling is fitted from10000sampled Train-prefix pairs per file and clamped to[1e-5,1]. The recovered routines are retained without replacing these choices.
+Each training script saves:
 
-New checkpoints are separate, for example Results/GRU/checkpoints/gru_retrained_s42.pt. Frozen `*_original.pt` files are never overwritten. The output also includes its scaler, training configuration, epoch history, training_loss.csv and training_loss.png under the corresponding results/training_s42 folder. Existing named retrained checkpoints are protected against overwrite. A different seed can produce different weights and results.
+- Best trained model checkpoint.
+- Model normalization and scaling parameters.
+- Training configuration.
+- Training and validation losses.
+- Epoch-by-epoch training history.
+- Training loss figures.
 
-`--smoke-test` executes a complete reduced3epoch run with forward/backward/optimizer steps, recursive training, validation, checkpoint saving and reload. It uses reduced batch/rollout/window counts and is clearly labelled; it does not establish full60epoch reproduction.
+Newly trained checkpoints are saved separately from the original frozen models.
 
-## Test and compare the four models
+The original checkpoints are not overwritten.
+
+### 2.7 Training Verification
+
+Before performing a complete training run, each model can be tested using the `--smoke-test` option.
+
+For example:
 
 ```powershell
-python Results/GRU/test.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --checkpoint original
-python Results/LSTM/test.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --checkpoint original
-python Results/Transformer/test.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --checkpoint original
-python Results/Compact/test.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --checkpoint original
-python Results/Model_Comparison/compare.py
+python Results/GRU/train.py --smoke-test --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache"
 ```
 
-The four trained neural models were evaluated on **11 separate Test recordings (Simulation_Output_43 to Simulation_Output_53)** using their original frozen checkpoints and training-data normalization parameters. No retraining was performed during testing.
+The smoke test runs a reduced three-epoch training procedure to verify that preprocessing, forward prediction, recursive training, backpropagation, parameter updates, checkpoint saving, validation and checkpoint reloading work correctly.
 
-The evaluation used **7,831 starting points** selected across the recordings, with regular starting points spaced 10,000 raw samples apart and the final valid starting point of each recording also included.
+A smoke test verifies that the training pipeline is executable. It does not replace the complete 60-epoch experiment or demonstrate reproduction of the original trained weights.
 
-Two prediction methods were evaluated:
+### 2.8 Testing the Four Models
 
-- **One-step prediction:** Each model predicts the next 22 physical states, which are compared with the recorded states.
-- **50-step recursive prediction:** Each model predicts 50 consecutive time steps. Its predicted states are fed back into the model while the recorded joystick commands are used as inputs. Future measured physical states are not provided.
+After training, the models can be evaluated using their corresponding `test.py` scripts.
 
-The original sampling interval is **10 microseconds**, meaning 50 recursive steps represent **0.5 milliseconds** of crane movement.
+The evaluation supports either the original frozen model checkpoints or newly trained checkpoints.
 
-Prediction errors are reported using **Normalized Root Mean Squared Error (NRMSE)**, calculated relative to the standard deviation of each state in the training data. Results are averaged equally across the 11 recordings for each state, and the overall value is the average across all 22 physical states.
+The four models are evaluated using the same Test recordings and prediction procedure.
 
-A lower NRMSE indicates better prediction performance.
+Two evaluation methods are used:
+
+1. **One-step prediction:** The model predicts the next 22 physical states using the recorded input information.
+2. **50-step recursive prediction:** The model predicts 50 consecutive future states, feeding its predictions back into the next step without using future measured physical states.
+
+At the original sampling interval of 10 µs, the 50-step recursive prediction represents **0.5 ms**.
+
+For each model, the test script calculates:
+
+- MAE.
+- RMSE.
+- NRMSE normalized by training-data standard deviation.
+- R².
+- Individual errors for all 22 physical states.
+- Overall errors across Test recordings.
+- Model inference time.
+
+The test scripts print the results and save numerical tables and figures under the corresponding model's `results/` folder.
+
+The models can then be compared using the saved results in `Results/Model_Comparison/`.
 
 #### Overall Prediction Results
 
