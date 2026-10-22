@@ -185,28 +185,5 @@ The unique36controller trajectories (MPC200,MPC400,conventional3,hybrid x9record
 ![Neural-assisted commands](Neural_MPC/results/comparison/commands.png)
 ![Controller accuracy/computation](Neural_MPC/results/comparison/accuracy_computation.png)
 
-## What was actually executed
-
-- All four original checkpoints: complete11recording Test evaluation; all 22state MAE/RMSE/NRMSE/R2 checked against the prior verified results.
-- All four trainers: complete reduced3epoch smoke pipeline, including gradient updates, validation, checkpoint saving, reload and small checkpoint-specific Test evaluations.
-- Original Compact trainer: **complete60epoch from-scratch run**, original seed42/settings, saved/reloaded checkpoint and complete11recording evaluation. Its new one-step NRMSE is5.3349289220e-06 and50-step NRMSE is1.4975278817e-04; it is not labelled as the original frozen checkpoint.
-- GRU,LSTM,Transformer: **full60epoch training was not rerun**. Their recovered code and shortened training pipelines passed; this is not a claim of full-training numerical reproduction. Historical recorded training time was about5minutes each for GRU/LSTM and30minutes for Transformer on this environment.
-- Neural command predictor: complete chosen-architecture training from fresh random weights using32288verified existing teacher examples;72epochs including its historical stopping criterion. Fresh teacher-label generation was smoke-tested and matched historical demonstrations exactly; the complete teacher corpus was not regenerated.
-- MPC200/MPC400 and conventional3/hybrid: full nine-recording autonomous reruns with exact saved-trajectory regression.
-- Full raw54CSV preprocessing was not repeated; compatible existing prepared recordings were reused. The recovered fitting/conversion kernels were checked against historical source. This is distinct from claiming a new end-to-end raw-data preparation run.
-
-Verification details are in MPC/results/reproducibility.json and MPC/configs/training_recovery.json. Frozen hashes are in MPC/configs/checkpoint_sha256.json. There are no known missing source/dependency blockers in the tested environment; a peer still needs the original data and the listed installed packages. Retraining other models, regenerating the full teacher corpus and executing from raw CSV without existing caches remain user-run workloads, not completed experiments claimed by this ZIP.
-
-## Quick checks
-
-```powershell
-python Results/GRU/preprocess.py --prepared-root "D:\PATU_Cache" --verify
-python Results/GRU/train.py --verify
-python Results/LSTM/train.py --verify
-python Results/Transformer/train.py --verify
-python Results/Compact/train.py --verify
-python MPC/run_mpc.py --verify
-python Neural_MPC/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --smoke-test --seed 44
-```
-
-All scripts provide --help; the training scripts also accept --seed and --smoke-test. Checkpoints/scalers/data manifests are retained, but raw recordings, teacher arrays, environments, bytecode/JIT caches, historical source trees and logs are excluded from the ZIP. Earlier archives and original historical source/checkpoints remain unchanged. No commits or pushes were made.
+For questions contact:
+Sohaib.Saeed@lut.fi
