@@ -504,10 +504,6 @@ The final frozen model is stored as:
 
 **Joystick inputs:** Lift and jib commands
 
-The checkpoint SHA256 is:
-
-`590028f9aa7c1e660f4a09ec4b7563619ddcb9ebcee34eb694b589d33dc942f5`
-
 This model is used throughout the MPC and neural-assisted MPC experiments.
 
 ### 4.2 Crane Tip Position Calculation
