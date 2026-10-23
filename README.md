@@ -825,7 +825,7 @@ The future trajectory information contains 40 reference points, each describing 
 
 This gives the neural network information about both the current crane condition and the movement that should be followed.
 
-### 6.2 Offline Training Data Generation
+### Offline Training Data Generation
 
 The neural network was trained using examples collected from the original MPC400 controller.
 
@@ -856,7 +856,7 @@ The development-validation demonstrations are used to evaluate neural training p
 
 The separate Test recordings are not used for neural-policy training or checkpoint selection.
 
-### 6.3 Neural Network Training
+### Neural Network Training
 
 The collected MPC demonstrations are used to train the neural command predictor through supervised learning.
 
@@ -889,7 +889,7 @@ The selected retrained checkpoint matched the original frozen neural policy in i
 
 The original policy checkpoint remains preserved and is the default model used in the final neural-assisted MPC evaluation.
 
-### 6.4 Training the Neural Command Predictor
+### Training the Neural Command Predictor
 
 The `Neural_MPC/train.py` script performs both MPC teacher-data generation and neural-network training.
 
@@ -917,7 +917,7 @@ The training script saves:
 
 Newly trained checkpoints are stored separately and do not overwrite the original successful policy.
 
-### 6.5 Neural-Assisted MPC Operation
+### Neural-Assisted MPC Operation
 
 Once the neural command predictor has been trained, it is combined with MPC400.
 
@@ -939,46 +939,34 @@ The final controller operates using the following procedure:
 
 The neural network does not replace MPC. It provides an initial joystick estimate, while MPC performs the final online optimization.
 
-### 6.6 Final Neural-Assisted MPC Results
 
-The final controller comparison was performed using nine complete development-validation recordings.
+### Final Neural-Assisted MPC Results
 
-All controllers used the same frozen Compact neural-surrogate environment.
+The final controllers were evaluated using nine complete development-validation recordings in the same frozen Compact virtual crane environment.
 
-Tracking performance was measured using mean Cartesian tip-position RMSE across the recordings. Controller computation time was measured separately using 136 matched controller input conditions.
+Two performance measures were considered:
 
-| Controller | Mean Tip RMSE | Mean Computation Time | p99 Time |
-|---|---:|---:|---:|
-| Original MPC400 (5 iterations) | 54.75 mm | 43.05 ms | 79.59 ms |
-| Conventional MPC400 (3 iterations) | 131.20 mm | 27.70 ms | 49.87 ms |
-| **Neural-Assisted MPC (3 iterations)** | **43.31 mm** | **27.59 ms** | **51.10 ms** |
+- **Tracking accuracy:** Mean Cartesian tip-position RMSE across the nine recordings. Lower RMSE means better trajectory tracking.
+- **Computational performance:** Controller execution time measured using 136 identical input conditions. Lower computation time means faster control calculations.
 
-Compared with the original five-iteration MPC400, the neural-assisted controller achieved:
+#### Controller Performance Comparison
 
-- **20.9% lower mean tip-position RMSE.**
-- **35.9% lower mean controller computation time.**
-- Improved tracking performance on six of nine recordings.
-- No observed deadline misses across 6,644 closed-loop updates.
+| Controller | Mean Tip RMSE ↓ | Mean Time ↓ | p99 Time ↓ | RMSE Improvement vs. Original | Computation Savings vs. Original |
+|---|---:|---:|---:|---:|---:|
+| Original MPC400 (5 iterations) | 54.75 mm | 43.05 ms | 79.59 ms | Reference (0%) | Reference (0%) |
+| Conventional MPC400 (3 iterations) | 131.20 mm | 27.70 ms | **49.87 ms** | -139.6% | 35.7% |
+| **Neural-Assisted MPC (3 iterations)** | **43.31 mm** | **27.59 ms** | 51.10 ms | **+20.9%** | **35.9%** |
 
-The mean computation time of **27.59 ms** is below the 100 ms control update interval, demonstrating real-time-capable computation under the evaluated conditions.
+**Lower values are better** for RMSE and computation time. Bold values indicate the best result in each metric.
 
-The neural-assisted MPC also achieved better mean tracking accuracy than conventional three-iteration MPC, showing the benefit of neural initialization under the same reduced solver iteration budget.
+The results show that the neural-assisted controller achieved the **lowest mean tracking error and lowest mean computation time** among the three configurations.
 
-However, the mean final tip-position error increased from 1.72 mm with the original MPC400 to 5.81 mm with the hybrid. Therefore, the hybrid was not better on every performance measure.
 
-The computation-time reduction primarily comes from the smaller optimization iteration budget, while the neural initialization improved the observed tracking performance relative to conventional three-iteration MPC.
+The proposed neural-assisted MPC achieved a mean tip-position RMSE of **43.31 mm**, compared with **54.75 mm** for the original MPC400, representing a **20.9% reduction in tracking error**. It also reduced mean computation time from **43.05 ms to 27.59 ms (35.9%)**, while improving tracking on six of nine validation recordings. Compared with conventional three-iteration MPC, which achieved **131.20 mm RMSE**, the neural-assisted controller reduced tracking error by approximately **67.0%** with nearly identical average computation time. Although its p99 computation time was slightly higher (**51.10 ms versus 49.87 ms**) and its mean final tip error increased from **1.72 mm to 5.81 mm**, the hybrid achieved a better overall accuracy–computation trade-off. No deadline misses were observed across **6,644 control updates**. These results demonstrate that neural initialization can improve MPC tracking performance with fewer optimization iterations, although further validation using an independent physical model or real crane is required.
 
-### 6.7 Main Research Achievement
 
-The final neural-assisted MPC demonstrates that a neural command predictor can be combined with conventional model predictive control to improve the tracking accuracy–computation trade-off.
 
-The neural network quickly estimates suitable joystick commands, and the MPC optimizer refines these estimates by predicting the future crane movement using the frozen Compact dynamics model.
-
-The proposed approach reduced both mean tracking error and online computation compared with the original MPC400 controller.
-
-The reported results were obtained using a shared learned virtual crane model. Independent physics-based or experimental crane validation is still required before claiming equivalent performance on physical machinery.
-
-### 6.8 Running Neural-Assisted MPC
+### Running Neural-Assisted MPC
 
 The `Neural_MPC` folder contains two main scripts:
 
