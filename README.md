@@ -1,418 +1,154 @@
-# PATU crane: training, prediction and Cartesian MPC
+# PATU Forestry Crane: Neural Dynamics Modelling and Predictive Control
 
-This package contains **17 Python scripts**: three per dynamics model, one comparison script, two MPC scripts and two neural-controller scripts. They recover the historical training routines as well as frozen-checkpoint evaluation. Every evaluation prints and saves its measured results. Raw CSVs and large prepared/teacher datasets remain external.
+This repository documents a reproducible research workflow for a PATU forestry crane: **four neural dynamics models**, a separately trained **Compact control predictor**, conventional **model predictive control (MPC)**, and a final **neural-assisted MPC** controller. The results and commands below refer to the simplified 17-script project layout described in the supplied project README. Raw recordings and large intermediate datasets are stored outside the repository.
 
-The controller experiments are **shared learned-model simulation**. The same selected Compact checkpoint supplies prediction and separately advanced virtual-plant dynamics. 
+> **Scope of the control results:** The controller's prediction model and the separately advanced virtual crane plant use the **same frozen learned Compact checkpoint**, with separate state histories. Consequently, this is a *shared-surrogate closed-loop simulation*, not independent multibody-physics or experimental crane validation.
 
-## Layout
+## 1. Repository layout and setup
 
 ```text
 PATU_Crane_Research/
-  README.md
-  Results/
-    GRU/          preprocess.py, train.py, test.py, checkpoints/, results/
-    LSTM/         preprocess.py, train.py, test.py, checkpoints/, results/
-    Transformer/  preprocess.py, train.py, test.py, checkpoints/, results/
-    Compact/      preprocess.py, train.py, test.py, checkpoints/, results/
-    Model_Comparison/  compare.py, results/
-  MPC/            mpc.py, run_mpc.py, requirements.txt, configs/, checkpoints/, results/
-  Neural_MPC/     train.py, test.py, checkpoints/, results/
+├── README.md
+├── Results/
+│   ├── GRU/                 preprocess.py  train.py  test.py  checkpoints/  results/
+│   ├── LSTM/                preprocess.py  train.py  test.py  checkpoints/  results/
+│   ├── Transformer/         preprocess.py  train.py  test.py  checkpoints/  results/
+│   ├── Compact/             preprocess.py  train.py  test.py  checkpoints/  results/
+│   └── Model_Comparison/    compare.py  results/
+├── MPC/                     mpc.py  run_mpc.py  requirements.txt  configs/  checkpoints/  results/
+└── Neural_MPC/              train.py  test.py  checkpoints/  results/
 ```
 
-No external source tree, archived historical workspace or package installation is required. The scripts use installed Python libraries and the bundled checkpoints/configuration. MPC numerical functions live directly in MPC/mpc.py; Neural_MPC imports that file. Architecture definitions and historical training functions live directly in each model's train.py. All scripts can also run from their own folders.
-
-## Installation and data
-
-Use **64-bit Python 3.12**; verification used Python3.12.10 on Windows. From this root:
+There are **17 main Python scripts** in this intended layout: 12 across the four model folders, one comparison script, two MPC scripts, and two neural-MPC scripts. Run commands from the project root. The simplified-package README identifies **64-bit Python 3.12** on Windows as its verified environment.
 
 ```powershell
 py -3.12 -m venv .venv
 & ".\.venv\Scripts\python.exe" -m pip install -r MPC/requirements.txt
 ```
 
-The following commands use `python` from that environment. Replace `D:\PATU_Data` and `D:\PATU_Cache` with your paths. All numerical entry points set OMP/OpenBLAS/MKL/Numba to one thread before numerical imports. Historical dynamics training explicitly uses its original two PyTorch threads; the controller uses one. JIT compilation/warm-up is excluded from benchmark times. Timing is hardware- and OS-dependent.
+Set `--data-root` to the original CSV location and `--prepared-root` to an external working/cache directory. The expected recordings are:
 
 ```text
-D:\PATU_Data/
-  Train/Simulation_Output_00.csv ... Simulation_Output_42.csv
-  Test/Simulation_Output_43.csv ... Simulation_Output_53.csv
+D:\PATU_Data\
+├── Train\Simulation_Output_00.csv ... Simulation_Output_42.csv  (43 recordings)
+└── Test\Simulation_Output_43.csv ... Simulation_Output_53.csv   (11 recordings)
 ```
 
-Two split definitions are deliberately different. **Dynamics training:** first 90% of every one of the43 Train recordings, with the last 10% of each used for validation. **Neural-controller training:**34 whole Train recordings, with nine other whole Train recordings held for validation. Test43..53 is never used for normalization fitting, dynamics training, policy training or checkpoint selection. It is described as historically reused Test because it was examined previously.
+The 54 recordings contain **22 measured/simulated physical-state signals** and **two joystick commands**, `ulift[V]` and `ujib[V]`. The 22 predicted physical states, in the source-defined order, are:
 
-The controller validation IDs are05,08,10,13,18,22,37,39,40. Frozen split, source-size and content-hash manifests are under MPC/configs/fixtures. Controller runs use6644common100ms intervals,664.4seconds across these nine recordings. The400ms preview tail is handled by matched usable durations, not unfairly truncated differently across controllers.
+```text
+speedref[rad/s], speedpmsm[rad/s], iqref[A], udref[V], uqref[V],
+id[A], iq[A], psid[Wb], psiq[Wb], pumppressure[Pa],
+plinepistonlift[Pa], plinerodlift[Pa], ppistonsidelift[Pa], prodsidelift[Pa],
+thetalift[rad], plinepistonjib[Pa], plinerodjib[Pa], ppistonjib[Pa],
+prodjib[Pa], thetajib[rad], thetaliftdot[rad/s], thetajibdot[rad/s]
+```
 
-## Preprocess once and share the cache
+Two different data partitions serve different purposes. For **dynamics training**, the first **90% of each of the 43 Train recordings** supplies training samples, and the last **10%** supplies validation samples. For **neural-controller training**, **34 complete Train recordings** supply MPC demonstrations and **nine other Train recordings** supply development-validation cases (IDs `05, 08, 10, 13, 18, 22, 37, 39, 40`). The **11 Test recordings** are not used to fit scalers or train/select checkpoints in the described reproduction. They were examined earlier in the research history, so they should not be characterized as a newly untouched external dataset.
 
-The four preprocess scripts are identical recovered implementations. They read the exact24columns, remove1800000initial rows (18s), preserve10us sampling, normalize with statistics fitted only to the90% Train prefixes, and apply the original51-sample/order3 Savitzky-Golay command smoothing. They save24-column float32 recordings and a feature schema; each model constructs the48features lazily as `concat(current,current-previous)`, avoiding duplicate huge48-column arrays. Commands remain inputs, not outputs. Physical reconstruction is `normalized*std+mean`.
+## 2. Stage I — Four neural dynamics models
+
+### 2.1 Preprocessing and the 48 input features
+
+All four candidate architectures learn the same task: given the recent crane condition and joystick commands, **predict changes in the next 22 physical states**. The original sampling period is **10 µs** (100,000 samples/s), *not* the 10 ms used later in the controller.
+
+Preprocessing removes the first **18 s** (`1,800,000` samples) of every recording; aligns the physical states and lift/jib commands; smooths the original-stage commands using a **Savitzky–Golay filter (51 samples, polynomial order 3)**; and normalizes the 24 signals using statistics fitted from the training portions only. The same saved scaler is used for validation or Test evaluation. The preprocessing cache holds the 24 aligned signals; the 48-feature inputs are constructed as needed, rather than stored as a second large dataset.
+
+| Prepared input | Features | Interpretation |
+|---|---:|---|
+| Current 22 physical states | 22 | Electrical, hydraulic and mechanical condition |
+| Current lift and jib joystick commands | 2 | Control signals applied at the current step |
+| Change in the 22 states since the previous step | 22 | Recent state evolution |
+| Change in the two joystick commands | 2 | Recent command variation |
+| **Total** | **48** | Current 24 signals plus their 24 first differences |
+
+Thus, each input contains the *current condition and recent changes*. The output consists of **22 physical-state increments**, not joystick predictions. These increments are multiplied by the saved training-derived state-increment scales and added to the current normalized physical states to obtain the next prediction. The original 24-column ordering, including the positions of the joystick columns, is defined by the preprocessing code.
+
+Prepare the shared training cache once:
 
 ```powershell
 python Results/GRU/preprocess.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --training-only
 ```
 
-GRU, LSTM, Transformer and Compact can share this cache. The equivalent independent commands are:
+Any of the other model-folder `preprocess.py` scripts implements the same preparation. Omit `--training-only` when preparing the Test recordings with the saved Train scaler. To evaluate an original checkpoint, specify its **original frozen scaler** (for example `--frozen-scaler Results/GRU/checkpoints/original_scaler.json`); do not refit normalization on Test data. The model `test.py` entry points can prepare missing arrays using the selected checkpoint's saved scaler.
 
-```powershell
-python Results/LSTM/preprocess.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --training-only
-python Results/Transformer/preprocess.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --training-only
-python Results/Compact/preprocess.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --training-only
-```
+### 2.2 Neural network architectures
 
-Omit `--training-only` to also prepare Test using Train-fitted normalization. A test script can prepare missing Test arrays itself using its selected checkpoint's scaler. `--frozen-scaler Results/GRU/checkpoints/original_scaler.json` tells preprocessing to use the frozen normalization instead of fitting it. Newly trained checkpoints embed their associated scaler. Existing compatible arrays can be supplied through `--prepared-root`; caches are outside raw Train/Test. Source-size/mtime and normalization signatures are checked. Full raw preprocessing is disk-intensive; no new scaler is fitted from Test.
+The **encoder** compresses the incoming measurements into smaller learned features, and the recurrent or attention mechanism processes temporal information before the decoder predicts state increments. These are *internal learned representations*, not separately trained latent-state autoencoders.
 
-The22physical outputs, in original order, are:
-
-`speedref[rad/s]`, `speedpmsm[rad/s]`, `iqref[A]`, `udref[V]`, `uqref[V]`, `id[A]`, `iq[A]`, `psid[Wb]`, `psiq[Wb]`, `pumppressure[Pa]`, `plinepistonlift[Pa]`, `plinerodlift[Pa]`, `ppistonsidelift[Pa]`, `prodsidelift[Pa]`, `thetalift[rad]`, `plinepistonjib[Pa]`, `plinerodjib[Pa]`, `ppistonjib[Pa]`, `prodjib[Pa]`, `thetajib[rad]`, `thetaliftdot[rad/s]`, `thetajibdot[rad/s]`.
-
-Joystick inputs are `ulift[V]` and `ujib[V]`, at original input indices0and16. The original full24-column order is defined in every preprocess.py and MPC/mpc.py.
-
-
-## 2. Stage I — Neural Dynamics Modelling
-
-The first stage of this research focuses on developing neural networks to predict the dynamic behaviour of the PATU forestry crane.
-
-Four neural architectures were investigated:
-
-1. Gated Recurrent Unit (GRU)
-2. Long Short-Term Memory (LSTM)
-3. Causal Transformer
-4. Compact Recurrent Model
-
-All four models use the same crane measurements and are trained to predict changes in the **22 physical states** under the applied lift and jib joystick commands.
-
-The aim is to compare their prediction accuracy, computational efficiency, and ability to predict crane movement recursively.
-
-### 2.1 Dataset and Preprocessing
-
-The original dataset consists of 54 crane recordings containing electrical, hydraulic, and mechanical measurements.
-
-Each recording contains:
-
-- **22 physical states:** Including electrical signals, hydraulic pressures, lift and jib angles, and angular velocities.
-- **2 joystick commands:** One controlling the lift boom and another controlling the jib boom.
-
-The original sampling interval is **10 microseconds (10 µs)**, corresponding to 100,000 samples per second.
-
-Before training, the data is prepared using the following steps:
-
-1. **Startup removal:** The first 18 seconds of each recording are removed to exclude initial startup behaviour.
-2. **Command smoothing:** A third-order Savitzky–Golay filter with a 51-sample window is applied to the joystick commands to reduce noise.
-3. **Signal alignment:** The physical states and joystick commands are aligned so that the models receive the correct information when predicting the next state.
-4. **Normalization:** The signals are normalized using parameters obtained from the training data. The same saved parameters are used during validation and testing.
-5. **Dataset separation:** Training, validation, and Test recordings are kept separate to prevent future information from entering the training process.
-
-The preprocessing also calculates changes between consecutive time steps, allowing the models to observe how the crane is moving rather than relying only on its current condition.
-
-### 2.2 Input Feature Construction
-
-Each model receives **48 input features**, constructed from the 22 physical states and two joystick commands.
-
-The features are divided into two groups:
-
-| Input Information | Features | Description |
-|---|---:|---|
-| Current physical states | 22 | Current electrical, hydraulic, and mechanical conditions |
-| Current joystick commands | 2 | Current lift and jib control inputs |
-| Changes in physical states | 22 | Difference between the current and previous physical states |
-| Changes in joystick commands | 2 | Difference between the current and previous joystick commands |
-| **Total** | **48** | **Complete model input** |
-
-The first 24 features describe the crane's current condition and applied commands.
-
-The remaining 24 features describe how those values have changed since the previous time step.
-
-For example, the current lift angle tells the model where the lift boom is pointing, while the change in lift angle provides information about its recent movement.
-
-Similarly, the current joystick command tells the model what input is being applied, while the change in joystick command indicates whether the operator has recently increased, decreased, or reversed that input.
-
-These 48 features provide both current-state and recent-motion information.
-
-All four models use these prepared features to predict the changes in the next **22 physical states**.
-
-The predicted state changes are scaled using the saved training-derived increment scales and added to the current states to obtain the next predicted crane state.
-
-The two joystick commands remain model inputs and are not included among the 22 predicted physical states.
-
-### 2.3 Neural Network Architectures
-
-The four models use different architectures to process the same input information.
-
-#### GRU — 4,098 Parameters
-
-The GRU receives the 48 prepared input features, which are first passed through an encoder that reduces them to **12 features**.
-
-These encoded features are processed by a GRU recurrent unit containing **16 hidden units**.
-
-The GRU maintains an internal memory of previous crane behaviour and updates it as new input information becomes available.
-
-The resulting information passes through a **16-unit decoding layer**, which predicts changes in all 22 physical states.
-
-A direct linear skip connection from the original input features also contributes to the state-change prediction.
-
-This allows the model to use both the information stored in its recurrent memory and the current crane measurements.
-
-#### LSTM — 4,946 Parameters
-
-The LSTM uses the same 48 input features and a **12-feature encoder**.
-
-The encoded information is processed by an LSTM recurrent unit containing **16 hidden units**.
-
-Unlike the GRU, the LSTM maintains both hidden memory and cell memory. These allow it to retain useful information about previous crane movements while processing new inputs.
-
-The recurrent output passes through a **16-unit decoding layer** to predict changes in the 22 physical states.
-
-A direct linear skip connection from the input features is also included.
-
-The main difference from GRU is the internal memory mechanism used to capture time-dependent crane behaviour.
-
-#### Causal Transformer — 4,710 Parameters
-
-The Transformer receives the same 48 input features and converts them into **16-dimensional encoded representations**.
-
-It processes a history of up to **64 time steps** using one Transformer layer with:
-
-- 2 attention heads.
-- 16-dimensional model representations.
-- A 32-unit feedforward layer.
-- Causal attention.
-- No dropout in the selected configuration.
-
-The attention mechanism allows the model to identify relationships between different time steps in the available input history.
-
-Causal attention ensures that the model cannot use future physical states when predicting an earlier state.
-
-The processed information passes through a **16-unit decoding layer**, which predicts changes in the 22 physical states.
-
-A direct linear skip connection from the input features also contributes to the output.
-
-#### Original Compact Recurrent Model — 4,246 Parameters
-
-The Compact model uses a custom recurrent architecture designed to provide accurate prediction with fewer parameters and lower computational cost.
-
-It receives the same 48 prepared input features.
-
-First, the model uses an encoder to represent the **22 physical states using 8 internal features**.
-
-These internal features are updated through the model's custom recurrent mechanism using the current input information and previous internal memory.
-
-The updated information is combined with the prepared inputs and processed through a **32-unit hidden layer**.
-
-A decoder predicts the changes in all 22 physical states.
-
-A direct linear skip connection also allows the original input features to contribute to the final prediction.
-
-The predicted state changes are scaled and added to the current physical states to obtain the next predicted state.
-
-The Compact architecture was designed to reduce model complexity while retaining the information required for recursive crane prediction.
-
-### 2.4 Architecture Comparison
-
-| Parameter | GRU | LSTM | Transformer | Compact |
-|---|---:|---:|---:|---:|
+| Component | GRU | LSTM | Causal Transformer | Original Compact |
+|---|---|---|---|---|
 | Input features | 48 | 48 | 48 | 48 |
-| Encoder dimension | 12 | 12 | 16 | 8 (physical-state encoder) |
-| Recurrent hidden units | 16 | 16 | — | Custom recurrent memory |
-| Attention heads | — | — | 2 | — |
-| Transformer layers | — | — | 1 | — |
-| Feedforward dimension | — | — | 32 | — |
-| Decoder/hidden dimension | 16 | 16 | 16 | 32 |
-| Predicted physical states | 22 | 22 | 22 | 22 |
-| Trainable parameters | 4,098 | 4,946 | 4,710 | 4,246 |
+| Input/physical-state encoder | 48 → 12 | 48 → 12 | 48 → 16 | 22 physical states → 8 |
+| Temporal mechanism | 16-unit GRU cell | 16-unit LSTM cell | 1 attention layer, 2 heads; 64-step causal history | Custom 8-feature recurrent transition |
+| Additional processing | 16-unit post-recurrent layer | 16-unit post-recurrent layer | Feedforward width 32 and 16-unit post-attention layer | 32-unit hidden layer |
+| Output | 22 state increments | 22 state increments | 22 state increments | 22 state increments |
+| Direct input-to-output skip | Yes | Yes | Yes | Yes |
+| **Trainable parameters** | **4,098** | **4,946** | **4,710** | **4,246** |
 
-All models predict physical-state changes rather than directly replacing the current state with an unrelated prediction.
+**GRU:** A 48-to-12 feature encoder feeds a 16-unit GRU memory cell. A 16-unit post-processing layer and output layer predict 22 state increments. An additional initialization encoder reads the 22 physical states to initialize memory, and a direct 48-to-22 linear skip contributes to the output.
 
-The original current-state information is retained when constructing the next predicted state.
+**LSTM:** The same 48-to-12 feature path feeds a 16-unit LSTM with separate hidden and cell memory. A physical-state encoder initializes both memory components. A 16-unit output-processing layer and direct skip produce the 22 increments.
 
-### 2.5 Model Training
+**Causal Transformer:** The 48 inputs are embedded in width 16, processed with one causal self-attention layer (two heads, feedforward width 32, dropout 0), and decoded through a 16-unit layer. Its context covers at most 64 previous steps. Causality prevents attending to future states.
 
-All four models were trained using the same general training procedure to provide a consistent comparison.
+**Original Compact:** A 22-to-8 encoder initializes its learned internal memory. At every step, a custom 8-dimensional transition combines current 48-feature input with prior memory; a 32-unit hidden layer and output decoder predict 22 increments, also using a direct linear skip. This is a compact *recurrent dynamics model*, not a separately trained latent-space control system.
 
-Instead of training only on individual next-state predictions, the training process includes **recursive prediction**.
+**Important:** The Compact candidate in this section has **4,246 parameters**, which is slightly *more* than the **4,098-parameter GRU**, but fewer than the LSTM and Transformer. It is **not** the later 9,916-parameter Compact model used for control.
 
-During recursive prediction, the model's predicted physical states are fed back into the model to calculate later predictions.
+### 2.3 Training method and settings
 
-This allows the model to learn from the errors that accumulate when its own predictions are used repeatedly.
+Models are trained on **recursive rollouts** as well as short next-step predictions: their own predicted physical states feed subsequent steps so the loss captures error accumulation. Recorded joystick input continues to provide the control sequence. A short two-epoch warm-up precedes longer training rollouts.
 
-#### Training Configuration
-
-| Training Parameter | Value |
-|---|---|
-| Original sampling interval | 10 µs |
-| Maximum training epochs | 60 |
-| Batch size | 16 |
-| Training steps per epoch | 20 |
+| Training setting | Recovered value |
+|---|---:|
+| Original dynamics seed | 42 |
+| Maximum epochs | 60 |
+| Batch size / steps per epoch | 16 / 20 |
 | Optimizer | AdamW |
-| Learning rate | 0.001 |
-| Weight decay | 0.000001 |
-| Gradient clipping | 1.0 |
-| Gradient blocks | 50 steps |
-| Initial warm-up | 2 epochs |
-| Warm-up prediction horizon | 5 steps |
-| Main training horizons | 100, 500, and 1,000 steps |
-| Horizon sampling probabilities | 20%, 60%, and 20% |
-| Maximum recursive burn-in | 10,000 steps |
-| Zero-prefix training cases | 25% |
-| Mechanical angle/velocity loss weight | 4 |
-| Other physical-state loss weight | 1 |
-| Original random seed | 42 |
-| Learning-rate scheduler | None |
-| Early stopping | None |
+| Learning rate / weight decay | 0.001 / 1e-6 |
+| Gradient clipping / gradient block | 1.0 / 50 steps |
+| Warm-up | First 2 epochs, 5-step rollouts |
+| Main rollout choices | 100 / 500 / 1,000 steps |
+| Rollout sampling probabilities | 20% / 60% / 20% |
+| Corresponding physical durations | 1 / 5 / 10 ms |
+| Recursive burn-in | Up to 10,000 steps; 25% zero-prefix cases |
+| Mechanical angle and angular-velocity loss weights | 4 each |
+| Other physical-state loss weights | 1 each |
+| Checkpoint criterion | Weighted 500-step validation over four fixed windows |
+| Learning-rate scheduler / early stopping | None / None |
 
-#### Recursive Training Horizons
+The four upweighted mechanical states are the **lift angle, jib angle, lift angular velocity and jib angular velocity**. This emphasizes mechanical movement during learning; it does not mean the other 18 physical states are omitted. The increment-scaling routine uses **10,000 sampled Train-prefix pairs per recording**, with scale clipping to **[1e-5, 1]**. The checkpoint selection procedure is separate from Test evaluation.
 
-After the initial warm-up, three recursive prediction horizons are used during training:
-
-| Prediction Steps | Physical Duration | Sampling Probability |
-|---|---:|---:|
-| 100 steps | 1 ms | 20% |
-| 500 steps | 5 ms | 60% |
-| 1,000 steps | 10 ms | 20% |
-
-This allows the networks to learn predictions over different short time intervals instead of focusing only on the next sample.
-
-The 500-step horizon is selected most frequently during training.
-
-#### Training Warm-up and Burn-in
-
-The first two epochs use short five-step predictions to initialize the learning process before longer recursive sequences are introduced.
-
-During the main training stage, historical information can also be processed through a recursive burn-in of up to 10,000 steps.
-
-This allows recurrent models to establish their internal memory before calculating the training loss.
-
-Some training cases use a zero-prefix configuration, allowing the models to learn under different memory initialization conditions.
-
-#### Training Loss
-
-The models are trained by comparing their predicted physical states with the recorded crane states.
-
-Prediction errors are calculated across the 22 states, with greater importance given to the four mechanical variables:
-
-- Lift angle.
-- Jib angle.
-- Lift angular velocity.
-- Jib angular velocity.
-
-These four variables receive a loss weight of **4**, while the remaining physical states receive a weight of **1**.
-
-This encourages the models to pay additional attention to mechanical movement, which is particularly important for subsequent crane trajectory prediction and control.
-
-State-change scaling is also calculated from training data using sampled consecutive-state differences. The original scaling procedure uses 10,000 sampled training-prefix pairs per recording and limits the resulting increment scales to the range from 0.00001 to 1.
-
-#### Model Selection
-
-Training runs for the configured maximum of 60 epochs.
-
-The best checkpoint is selected using a weighted **500-step recursive validation evaluation** across four fixed validation windows.
-
-The models are not selected using the Test recordings.
-
-The selected model checkpoint and its associated normalization parameters are saved for later evaluation.
-
-### 2.6 Training the Four Models
-
-Each neural model has its own `train.py` script, allowing it to be trained independently.
-
-The training scripts use the original CSV recordings and prepared data.
-
-Run GRU:
+Train independently:
 
 ```powershell
 python Results/GRU/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --seed 42
-```
-
-Run LSTM:
-
-```powershell
 python Results/LSTM/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --seed 42
-```
-
-Run Transformer:
-
-```powershell
 python Results/Transformer/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --seed 42
-```
-
-Run Compact:
-
-```powershell
 python Results/Compact/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --seed 42
 ```
 
-Seed 42 reproduces the original configured random seed. Other seeds can be used for additional training runs but may produce different model weights and prediction results.
+Training writes a **new checkpoint**, its associated scaler, configuration, epoch history, `training_loss.csv`, and loss figure to the corresponding folder. Original frozen checkpoints are preserved. A different random seed may lead to different weights and metrics. For a reduced end-to-end training check, add `--smoke-test` (three reduced epochs with forward/backward passes, validation, checkpoint save and reload); this **does not establish a full 60-epoch reproduction**.
 
-Each training script saves:
+### 2.4 Frozen-checkpoint testing and comparison
 
-- Best trained model checkpoint.
-- Model normalization and scaling parameters.
-- Training configuration.
-- Training and validation losses.
-- Epoch-by-epoch training history.
-- Training loss figures.
+The four original checkpoints were evaluated on **11 Test recordings** (43–53) using the same sampling and evaluation procedure. The protocol uses **7,831 rollout origins**, selected at **10,000-raw-sample spacing**, plus the last valid origin of each recording. A **one-step** prediction scores the next physical state; a **50-step recursive rollout** feeds predicted states back while supplying the recorded joystick commands, without injecting future measured physical states. **50 × 10 µs = 0.5 ms**, *not* 500 ms.
 
-Newly trained checkpoints are saved separately from the original frozen models.
+The reported NRMSE divides errors by the *training-data standard deviation* for each physical state, averages recordings equally per state, and then averages the 22 state scores equally. Lower NRMSE is better; these tiny short-horizon errors are **not accuracy percentages**. R² can be undefined for effectively constant states.
 
-The original checkpoints are not overwritten.
+| Model | Parameters | One-step NRMSE ↓ | 50-step NRMSE ↓ | One-step inference | 50-step inference |
+|---|---:|---:|---:|---:|---:|
+| GRU | 4,098 | 5.419649e-6 | 1.503523e-4 | 4.303 µs | 73.786 µs |
+| LSTM | 4,946 | 5.413840e-6 | 1.531134e-4 | 4.470 µs | 79.741 µs |
+| Transformer | 4,710 | 5.786726e-6 | 1.598183e-4 | 6.409 µs | 380.631 µs |
+| **Original Compact** | **4,246** | **5.334929e-6** | **1.497528e-4** | **4.002 µs** | **67.180 µs** |
 
-### 2.7 Training Verification
+The original Compact achieved the lowest **mean** one-step and 50-step NRMSE and the lowest measured native inference time. The differences in errors are small and it does not win every individual signal. Timing values are warmed, single-thread native inference benchmarks, not complete controller-loop times.
 
-Before performing a complete training run, each model can be tested using the `--smoke-test` option.
+#### Per-state 50-step recursive NRMSE
 
-For example:
-
-```powershell
-python Results/GRU/train.py --smoke-test --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache"
-```
-
-The smoke test runs a reduced three-epoch training procedure to verify that preprocessing, forward prediction, recursive training, backpropagation, parameter updates, checkpoint saving, validation and checkpoint reloading work correctly.
-
-A smoke test verifies that the training pipeline is executable. It does not replace the complete 60-epoch experiment or demonstrate reproduction of the original trained weights.
-
-### 2.8 Testing the Four Models
-
-After training, the models can be evaluated using their corresponding `test.py` scripts.
-
-The evaluation supports either the original frozen model checkpoints or newly trained checkpoints.
-
-The four models are evaluated using the same Test recordings and prediction procedure.
-
-Two evaluation methods are used:
-
-1. **One-step prediction:** The model predicts the next 22 physical states using the recorded input information.
-2. **50-step recursive prediction:** The model predicts 50 consecutive future states, feeding its predictions back into the next step without using future measured physical states.
-
-At the original sampling interval of 10 µs, the 50-step recursive prediction represents **0.5 ms**.
-
-For each model, the test script calculates:
-
-- MAE.
-- RMSE.
-- NRMSE normalized by training-data standard deviation.
-- R².
-- Individual errors for all 22 physical states.
-- Overall errors across Test recordings.
-- Model inference time.
-
-The test scripts print the results and save numerical tables and figures under the corresponding model's `results/` folder.
-
-The models can then be compared using the saved results in `Results/Model_Comparison/`.
-
-#### Overall Prediction Results
-
-| Model | Parameters | One-step NRMSE | 50-step NRMSE |
-|---|---:|---:|---:|
-| GRU | 4,098 | 5.419649e-6 | 1.503523e-4 |
-| LSTM | 4,946 | 5.413840e-6 | 1.531134e-4 |
-| Transformer | 4,710 | 5.786726e-6 | 1.598183e-4 |
-| **Original Compact** | **4,246** | **5.334929e-6** | **1.497528e-4** |
-
-The Compact model achieved the lowest overall NRMSE for both one-step and 50-step recursive prediction. However, the differences between models were relatively small.
-
-#### Prediction Results for All 22 Physical States
-
-The following table compares the average **50-step recursive NRMSE** for each of the 22 physical states across the 11 Test recordings.
-
-The values are shown in scientific notation to make small differences between models easier to identify.
+The following table includes **all 22 physical-state outputs**, averaged over the 11 Test recordings. Values are rounded for presentation; bold indicates the lowest value in a row. For nearly tied values, refer to full-precision exported CSVs.
 
 | Physical State | GRU | LSTM | Transformer | Compact |
 |---|---:|---:|---:|---:|
@@ -439,559 +175,229 @@ The values are shown in scientific notation to make small differences between mo
 | `thetaliftdot[rad/s]` | **7.35e-4** | 7.48e-4 | 7.45e-4 | 7.41e-4 |
 | `thetajibdot[rad/s]` | 1.174e-3 | **1.172e-3** | 1.299e-3 | 1.177e-3 |
 
-**Bold values** indicate the lowest reported NRMSE for each physical state.
+The overall advantage of the Compact model is most evident in its average and its hydraulic-pressure predictions; GRU leads on the lift/jib angles and lift angular velocity, and LSTM on jib angular velocity. The angular-velocity states have the largest normalized short-horizon errors. **These 0.5 ms forecast scores cannot by themselves establish long-term physical-model accuracy.** The 10 ms controller predictor introduced below is a separately trained model, so its control results should not be treated as a direct extension of these scores.
 
-#### Discussion of Prediction Results
-
-The results show that the Compact model achieved the lowest overall normalized prediction error while using fewer parameters than the other three architectures.
-
-For the mechanical states, GRU achieved the lowest errors for lift and jib angles and lift angular velocity, while LSTM achieved the lowest error for jib angular velocity.
-
-The Compact model performed particularly well on hydraulic-pressure states, including lift and jib piston-side pressures and rod-side pressures.
-
-Angular velocities showed the largest normalized prediction errors, particularly jib angular velocity. This indicates that predicting changes in crane movement was more challenging than predicting several slowly varying electrical and hydraulic signals over this short horizon.
-![Four-model accuracy](Results/Model_Comparison/results/accuracy.png)
-![Four-model inference timing](Results/Model_Comparison/results/latency.png)
-![Accuracy versus native inference time](Results/Model_Comparison/results/accuracy_computation.png)
-
-Test a separately trained checkpoint explicitly:
+Run the original frozen evaluation in each model folder (use `--checkpoint original` if that is the selector in the current release); to explicitly evaluate a newly trained checkpoint:
 
 ```powershell
 python Results/GRU/test.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --checkpoint Results/GRU/checkpoints/gru_retrained_s42.pt
 python Results/Compact/test.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --checkpoint Results/Compact/checkpoints/compact_retrained_s42.pt
+python Results/Model_Comparison/compare.py
 ```
 
-Retrained evaluations are saved separately by checkpoint name, retaining frozen results. The comparison reads the four default saved frozen result folders and refuses incompatible protocols. It does not convert NRMSE into an artificial accuracy percentage.
+Each model's test stage prints and saves summary scores, per-state and per-recording metrics, inference timing, and prediction figures. Newly trained checkpoint results must stay separate from original frozen-checkpoint results. The comparison script reads compatible saved results rather than mixing normalization or evaluation protocols.
 
+![Four-model accuracy](Results/Model_Comparison/results/accuracy.png)
+![Four-model inference timing](Results/Model_Comparison/results/latency.png)
+![Accuracy versus native inference time](Results/Model_Comparison/results/accuracy_computation.png)
 
-## 4. Stage II — Improved Compact Dynamics Model and Crane Geometry
+## 3. Stage II — Compact predictor selected for control and crane geometry
 
-Following the comparison of the four neural models, a separate improved Compact recurrent model was developed for predictive control of the PATU forestry crane.
+The final MPC does **not** operate with the original 4,246-parameter, 10 µs Compact candidate. It uses a **separate 9,916-parameter frozen Compact predictor** trained for **10 ms** state advances (`1,000 × 10 µs`). This reduces the forecast depth needed for practical MPC. The checkpoint is:
 
-The original Compact model contained **4,246 parameters** and was evaluated using the original 10 µs sampling interval. However, running long-term predictive control at this sampling rate would require a very large number of recursive predictions.
+```text
+MPC/checkpoints/compact_norm_integrated_s44_dt1000.pt
+SHA256: 590028f9aa7c1e660f4a09ec4b7563619ddcb9ebcee34eb694b589d33dc942f5
+```
 
-Therefore, the control-stage Compact model was developed to predict crane movement at **10 ms intervals**, corresponding to 1,000 original sampling intervals.
+### 3.1 How the improved model handles mechanical motion
 
-The improved model contains **9,916 parameters** and predicts changes in all 22 physical states based on the current crane condition, joystick commands and recent state changes.
+The model predicts all **22 physical states** given current states, recent changes and candidate lift/jib commands. Relative state differences are separately scaled. For the **lift and jib angles**, the improved model uses the current and predicted angular velocities and the **10 ms step duration** to integrate angles using their average angular velocity (a trapezoidal update). This keeps predicted angle change connected to predicted motion rather than using unconstrained angle increments alone. The original saved normalization and state-range handling are retained. The control-stage forecast and virtual-plant advancement use **raw, unsmoothed command histories**; they do not apply the four-model preprocessing smoother to newly optimized commands.
 
-### 4.1 Improvements to Mechanical-State Prediction
+### 3.2 Converting joint angles to crane-tip position
 
-One important improvement was how the model predicts the lift and jib angles.
+MPC tracks the crane tip in the **horizontal–vertical (Cartesian X–Z) plane**. The geometry uses:
 
-Rather than independently predicting every mechanical quantity without considering its relationship to movement, the improved model uses its predicted angular velocities to update the mechanical angles.
-
-The process works as follows:
-
-1. The model receives the current crane states and lift/jib joystick commands.
-2. It predicts how the mechanical and other physical states will change over the next 10 ms.
-3. The predicted lift and jib angular velocities are used to update their respective angles.
-4. For each angle, the current and predicted angular velocities are averaged to estimate the movement during the 10 ms interval.
-5. The updated angles become part of the next predicted crane state.
-
-This approach maintains a direct relationship between angular velocity and angular position.
-
-The model also uses separately normalized state changes and preserves the original normalization and physical-state limits when producing predictions.
-
-The final frozen model is stored as:
-
-`compact_norm_integrated_s44_dt1000.pt`
-
-**Parameters:** 9,916
-
-**Prediction interval:** 10 ms
-
-**Predicted outputs:** 22 physical crane states
-
-**Joystick inputs:** Lift and jib commands
-
-This model is used throughout the MPC and neural-assisted MPC experiments.
-
-### 4.2 Crane Tip Position Calculation
-
-Although the neural model predicts the lift and jib angles, MPC needs to know where the crane tip is located.
-
-Therefore, forward kinematics is used to convert the predicted mechanical angles into the horizontal and vertical coordinates of the crane tip.
-
-The calculation uses the calibrated crane geometry:
-
-| Geometric parameter | Value |
+| Component | Calibrated value |
 |---|---|
-| Base horizontal position | -0.09 m |
-| Base vertical position | 1.4261 m |
-| Main lift boom local vector | (2.886080943, 0.019892554) m |
-| Jib boom local vector | (2.035, 0.245) m |
+| Fixed base (X, Z) | (−0.09, 1.4261) m |
+| Lift boom local vector | (2.886080943, 0.019892554) m |
+| Jib-to-tip local vector | (2.035, 0.245) m |
 
-The calculation starts at the fixed crane base.
+Forward kinematics separately rotates the lift and jib vectors by their corresponding measured or predicted angles and adds both to the fixed base. **Both angles are world-frame absolute angles**: the jib angle is not added to the lift angle. The reference and predicted trajectories use the *same* geometric conversion.
 
-The main boom vector is rotated according to the lift angle to determine its horizontal and vertical contribution. The jib vector is then rotated according to the jib angle and added to the lift boom contribution.
+### 3.3 Where the reference trajectory comes from
 
-Both angles are defined relative to the world coordinate system, so the jib angle is used directly rather than being added to the lift angle.
+The **recorded CSVs** provide the desired future lift and jib angles and angular velocities. Their angles are converted to a desired **X–Z tip trajectory**. MPC uses this future trajectory as a **reference**, but **does not replay the recorded joystick commands as its control output**. Instead it generates new bounded lift and jib command pairs using the current virtual-plant state and a frozen neural forecast of their consequences. Future reference information is available to the planner; **future actual virtual-plant states are not**.
 
-This calculation gives the crane tip position in metres.
+## 4. Stage III — Conventional model predictive control
 
-The same forward-kinematics procedure is used for both the recorded reference trajectory and the predicted crane movement.
+MPC repeatedly selects lift/jib joystick commands by predicting future crane motion and minimizing a cost measuring reference-tracking error and undesirable command behavior. Every **100 ms**, it observes the latest **22 virtual-plant states**, optimizes a command plan over its longer forecast horizon, applies **only the first 100 ms command pair**, then advances the plant and replans. This is *receding-horizon control*.
 
-### 4.3 Reference Trajectory
+### 4.1 MPC200 versus MPC400
 
-The desired movement comes directly from the original crane CSV recordings.
-
-Each recording provides the mechanical trajectory, including:
-
-- Lift boom angle.
-- Jib boom angle.
-- Lift angular velocity.
-- Jib angular velocity.
-
-The recorded lift and jib angles are converted into Cartesian tip positions using the crane geometry.
-
-These positions form the reference trajectory that MPC attempts to follow.
-
-The recorded joystick commands are not replayed as the controller output. Instead, MPC generates its own commands to follow the recorded mechanical movement.
-
-During control, the Compact model predicts the future crane angles under proposed joystick commands. Forward kinematics converts these predicted angles into tip positions, which are then compared with the recorded reference positions.
-
----
-
-## 5. Stage III — Model Predictive Control (MPC)
-
-Model Predictive Control (MPC) was implemented to automatically generate lift and jib joystick commands that allow the simulated crane to follow the recorded reference trajectory.
-
-At each control update, MPC reads the current 22 physical states and looks at the upcoming reference movement.
-
-It then proposes joystick commands and uses the frozen Compact dynamics model to predict how the crane will respond.
-
-The predicted crane tip positions and mechanical movements are compared with their desired reference values. The optimizer adjusts the proposed commands to reduce the resulting tracking cost.
-
-Only the first optimized joystick command pair is applied to the virtual crane. After 100 ms, the controller receives the updated crane states and repeats the optimization using the next reference segment.
-
-This repeated prediction, optimization and feedback process is called **receding-horizon control**.
-
-### 5.1 Prediction Horizon and Control Interval
-
-Two main MPC configurations were evaluated: **MPC200 and MPC400**.
-
-The numbers 200 and 400 indicate how far the controller predicts into the future, measured in milliseconds.
-
-- **MPC200:** Predicts crane movement 200 ms ahead.
-- **MPC400:** Predicts crane movement 400 ms ahead.
-
-Both controllers predict crane states every 10 ms and calculate new joystick commands every 100 ms.
-
-The prediction horizon, prediction step and control interval have different meanings:
-
-| Setting | Meaning |
-|---|---|
-| Prediction step | Time between two predicted crane states |
-| Prediction horizon | Total future duration considered during optimization |
-| Control interval | Time between controller updates |
-
-For example, MPC400 looks 400 ms into the future using 40 prediction steps. However, it only applies the first joystick command for 100 ms before calculating a new plan.
-
-#### Why Not Use a 50 ms Prediction Horizon?
-
-The selected control interval is 100 ms, meaning the joystick commands are held for 100 ms before the next optimization.
-
-A prediction horizon of only 50 ms would cover less than one complete control interval. The optimizer would therefore be unable to evaluate the full effect of the applied command before the next control update.
-
-For this reason, the main evaluated configurations used longer prediction horizons.
-
-MPC200 was initially evaluated with a 200 ms horizon. MPC400 was then investigated to determine whether additional look-ahead could improve trajectory tracking, particularly during direction changes and delayed crane responses.
-
-A separate 50 ms control update interval would be a different controller configuration requiring more frequent optimization. Its performance was not established in the selected comparison.
-
-### 5.2 MPC Configuration
-
-| Parameter | MPC200 | MPC400 |
-|---|---|---|
-| Control update interval | 100 ms | 100 ms |
-| Neural prediction step | 10 ms | 10 ms |
+| Configuration | MPC200 | MPC400 (selected) |
+|---|---:|---:|
+| Internal model step | 10 ms | 10 ms |
 | Prediction horizon | 200 ms | 400 ms |
-| Prediction steps | 20 | 40 |
-| First control block | 100 ms | 100 ms |
-| Second control block | 100 ms | 300 ms |
-| Optimized joystick values | 4 | 4 |
-| Optimization algorithm | SLSQP | SLSQP |
-| Maximum iterations | 5 | 5 |
-| Solver tolerance (`ftol`) | 1e-8 | 1e-8 |
-| Finite-difference step (`eps`) | 0.03 | 0.03 |
-| Dynamics model | Compact (9,916 parameters) | Compact (9,916 parameters) |
+| Forecast steps | 20 | 40 |
+| Replanning/control interval | 100 ms | 100 ms |
+| Move block 1 | 100 ms | 100 ms |
+| Move block 2 | 100 ms | 300 ms |
+| Optimized quantities | Lift and jib for each block = **4 scalars** | Lift and jib for each block = **4 scalars** |
+| Optimizer | SLSQP | SLSQP |
+| Max solver iterations | 5 | 5 |
+| Solver `ftol` | 1e-8 | 1e-8 |
+| Finite-difference `eps` | 0.03 | 0.03 |
+| Prediction/virtual-plant model | Frozen 9,916-param Compact | Frozen 9,916-param Compact |
 
-Each controller optimizes four joystick values: one lift command and one jib command for each of the two planned control blocks.
+The **400 ms horizon** gives a longer view of the intended motion without increasing the number of decision variables: it still adjusts only two joystick pairs. The second pair is held over the remainder of the forecast, but it is *not* blindly sent to the plant; optimization runs again after the first 100 ms.
 
-In MPC200, both control blocks cover 100 ms.
+**Why not use a 50 ms prediction horizon?** With the selected **100 ms control interval**, a 50 ms forecast ends *before the currently chosen command stops being applied*. Such an objective cannot assess the full held-command effect and supplies less anticipation. A **50 ms control interval** would be a different, more frequently optimized design; it was **not** part of the reported selected comparison. Do not interpret this as an experimentally demonstrated failure of a 50 ms controller.
 
-In MPC400, the first block covers 100 ms and the second covers 300 ms.
+### 4.2 MPC objective and its actual weights
 
-This allows MPC400 to predict further into the future without increasing the number of optimized joystick variables.
+Every candidate joystick plan is propagated through the frozen neural dynamics and converted to predicted X–Z tip positions. The numerical objective is a **weighted sum of mean squared normalized tracking and command terms** (plus a terminal error), not a raw unnormalized sum over 40 steps.
 
-The second block is used for future planning. Only the first 100 ms command is applied before optimization is repeated.
-
-### 5.3 MPC Objective Function
-
-The objective function determines which joystick commands are considered better.
-
-For every proposed command sequence, MPC predicts the resulting crane movement over the complete prediction horizon.
-
-It then calculates several tracking and control penalties.
-
-| Cost component | Weight | Purpose |
+| Cost term | Weight | How it contributes |
 |---|---:|---|
-| Tip position tracking | 1.0 | Keep the crane tip close to its reference position |
-| Joint angle tracking | 0.0 | Disabled in the selected configuration |
-| Angular velocity tracking | 0.1 | Follow the reference lift and jib angular velocities |
-| Joystick effort | 0.0001 | Discourage unnecessarily large joystick commands |
-| Joystick command changes | 0.001 | Discourage abrupt changes between commands |
-| Terminal tip position | 5.0 | Give additional importance to the tip position at the end of the prediction horizon |
+| **Tip-position tracking** | **1.0** | Mean squared difference between predicted and recorded X–Z tip coordinates, each divided by **0.01 m (10 mm)** |
+| Joint-angle tracking | **0.0** | Disabled in the selected run; angle information still affects tip position via geometry |
+| **Angular-velocity tracking** | **0.1** | Mean squared lift/jib velocity error after division by the saved corresponding standard deviations |
+| Joystick effort | **0.0001** | Penalizes squared command magnitude after normalization to the command bounds |
+| Joystick changes | **0.001** | Penalizes changes from the previous applied command to block 1 and from block 1 to block 2 |
+| **Terminal tip-position tracking** | **5.0** | Additional squared normalized X–Z tip error at the **last** forecast step |
 
-#### How the Cost Is Calculated
+The **tip-position scale of 10 mm is a cost normalization choice**, not a guaranteed allowable tracking error. The angular-velocity term adds information about *how* the booms should move; the terminal term adds emphasis on *where the tip should end the planned horizon*. The joystick penalties discourage unnecessarily large or abruptly changing commands. They are soft penalties, **not certified physical safety limits**.
 
-**1. Tip position tracking**
+The bounded joystick values are approximately **−1 V to +1 V**, with original observed, slightly asymmetric channel bounds preserved in code. Command-rate and hydraulic-pressure constraints are not independently enforced in the selected configuration. SLSQP starts from a shifted prior plan, evaluates neural rollouts and cost values, and keeps the best feasible candidate found even when the numerical solver reports non-success. The setup uses a numerical gradient step of `0.03` and an iteration budget of five, which does **not** imply only five forward model evaluations.
 
-At each prediction step, MPC calculates the horizontal and vertical difference between the predicted crane tip and the corresponding recorded reference position.
+### 4.3 MPC tracking results and selected controller
 
-The differences are scaled using a reference distance of **0.01 m (10 mm)**.
+MPC200 and MPC400 were compared on **nine development-validation recordings** (IDs `05, 08, 10, 13, 18, 22, 37, 39, 40`). Tip RMSE measures the Euclidean Cartesian difference between the virtual crane tip and its recorded reference, with each recording contributing equally to the reported mean.
 
-The scaled errors are squared and averaged over the position coordinates and prediction steps.
-
-This is the main component of the tracking objective.
-
-**2. Angular velocity tracking**
-
-The predicted lift and jib angular velocities are compared with their recorded reference values.
-
-The differences are normalized using the saved training-derived dynamics-scaler standard deviations.
-
-The normalized errors are squared and averaged.
-
-This encourages the crane to follow the desired movement speeds, rather than only reaching the correct tip position.
-
-**3. Joystick effort**
-
-The planned lift and jib commands are normalized using their permitted command ranges.
-
-Their squared values are averaged.
-
-This term discourages unnecessarily large joystick commands, although its weight is relatively small.
-
-**4. Joystick command changes**
-
-The first planned joystick command is compared with the previously applied command.
-
-The second planned command is compared with the first planned command.
-
-These differences are normalized, squared and averaged.
-
-This term discourages unnecessary command changes during movement.
-
-**5. Terminal tip position**
-
-MPC also calculates the tip-position error at the final prediction step.
-
-For MPC200, this is the predicted tip position after 200 ms.
-
-For MPC400, this is the predicted tip position after 400 ms.
-
-The terminal error is normalized using the same 10 mm position scale and given a weight of 5.0.
-
-This encourages the controller to consider where the crane will be at the end of the prediction horizon.
-
-The weighted cost components are added together, and MPC searches for the joystick commands that minimize the final cost.
-
-### 5.4 SLSQP Optimization
-
-The MPC controller uses **Sequential Least Squares Programming (SLSQP)** to optimize the four joystick values.
-
-The joystick commands are bounded approximately between -1 V and +1 V, using the original observed command limits.
-
-At each control update:
-
-1. SLSQP receives an initial feasible joystick plan.
-2. The Compact model predicts the crane movement under that plan.
-3. The MPC objective evaluates its tracking and control costs.
-4. SLSQP adjusts the joystick values to search for a lower-cost plan.
-5. The best feasible command plan found during optimization is retained.
-6. The first 100 ms command is applied to the virtual crane.
-
-The original MPC uses a maximum of five SLSQP iterations. Each iteration can require multiple cost-function and neural-model evaluations.
-
-The initial optimization plan is updated using the previous optimization result, allowing the controller to retain useful information from earlier control decisions.
-
-The current configuration uses experimental joystick bounds and does not include independently certified hydraulic-pressure or joystick-rate constraints.
-
-### 5.5 MPC200 and MPC400 Results
-
-Both configurations were evaluated using nine development-validation recordings.
-
-The main performance metric was Cartesian tip-position RMSE, which measures how closely the simulated crane tip follows the recorded reference trajectory.
-
-| Controller | Prediction Horizon | Mean Tip RMSE |
-|---|---|---:|
+| Controller | Prediction horizon | Mean tip-position RMSE ↓ |
+|---|---:|---:|
 | MPC200 | 200 ms | 521.21 mm |
 | **MPC400** | **400 ms** | **54.75 mm** |
 
-Increasing the prediction horizon from 200 ms to 400 ms reduced mean tip-position RMSE by approximately **89.5%**.
+MPC400 reduced mean tip-position RMSE by **approximately 89.5%** relative to MPC200 in this development comparison. It was selected for the neural-assisted stage. Its separate **136-context matched, warmed, single-thread** benchmark showed **43.05 ms mean** controller computation and **79.59 ms p99**, against a **100 ms replanning interval**. This timing excludes unrelated whole-simulation overhead and is machine-dependent; it is not a formal hard real-time certification.
 
-The improvement indicates that the longer prediction horizon allowed the controller to better anticipate the upcoming reference movement under the evaluated conditions.
+### 4.4 Run MPC
 
-The selected MPC400 controller also achieved the following computation performance:
-
-| Metric | MPC400 |
-|---|---:|
-| Mean tip-position RMSE | 54.75 mm |
-| Mean controller computation time | 43.05 ms |
-| 99th-percentile computation time | 79.59 ms |
-| Control update interval | 100 ms |
-
-The MPC400 controller was therefore selected as the reference controller for the subsequent neural-assisted MPC experiments.
-
-### 5.6 Running MPC
-
-The project provides two scripts:
-
-- `MPC/mpc.py` — Contains the Compact dynamics model, crane geometry, MPC objective, optimizer and virtual crane simulation.
-- `MPC/run_mpc.py` — Runs the MPC experiments and generates results.
-
-Run both MPC configurations:
+The `MPC/mpc.py` file contains the selected Compact dynamics implementation, kinematics, MPC cost and solver, and shared-model virtual plant. `MPC/run_mpc.py` runs comparisons and saves per-recording trajectories, tracking errors, joystick histories, solver diagnostics and timing tables/plots under `MPC/results/`.
 
 ```powershell
 python MPC/run_mpc.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --controller both
-```
-
-Run MPC400 only:
-
-```powershell
 python MPC/run_mpc.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --controller mpc400
-```
-
-Run the implementation verification:
-
-```powershell
 python MPC/run_mpc.py --verify
 ```
 
-Use `--recompute` when the saved results should be regenerated rather than reused.
+Use `--recompute` to rerun saved full experiments; `--smoke-test` is a limited functional check. Cached runs should be accepted only after validation of recording durations and trajectory/configuration hashes.
 
-The scripts print and save:
+![MPC Cartesian trajectories](MPC/results/comparison/trajectory.png)
+![MPC mechanical states](MPC/results/comparison/mechanical_states.png)
 
-- Per-recording tracking metrics.
-- Overall tip-position RMSE.
-- Cartesian reference and simulated trajectories.
-- Lift and jib angle comparisons.
-- Angular-velocity comparisons.
-- Lift and jib joystick commands.
-- Tip-position error histories.
-- Solver information and computation times.
+## 5. Stage IV — Offline neural policy and neural-assisted MPC
 
-Outputs are stored under `MPC/results/`.
+### 5.1 What is learned and why
 
----
+The final system uses a **frozen neural command predictor** to provide a quick *starting guess* for MPC; it does **not** replace the MPC optimizer. A supervised network learns from original **MPC400 joystick decisions** collected offline, then proposes one lift/jib pair when the online controller is called.
 
-## 6. Stage IV — Neural-Assisted Model Predictive Control
-
-The final proposed approach combines a neural command predictor with the selected MPC400 controller.
-
-The objective is to reduce online optimization computation while maintaining or improving trajectory-tracking performance.
-
-Instead of starting every MPC optimization using only its previous optimization plan, the hybrid controller uses a neural network to provide an initial estimate of suitable joystick commands.
-
-MPC then refines these estimated commands using the same frozen Compact dynamics model and cost function.
-
-### 6.1 Neural Command Predictor
-
-A fully connected neural network was trained using joystick decisions generated by the original MPC400 controller.
-
-The network contains **35,394 parameters** and has the following architecture:
-
-**210 input features → 128 neurons → 64 neurons → 2 joystick outputs**
-
-The two outputs represent the lift and jib joystick commands.
-
-The 210 input features are constructed as follows:
-
-| Input information | Number of features |
+| Neural-policy input | Number of features |
 |---|---:|
-| Current physical crane states | 22 |
-| Previous physical crane states | 22 |
-| Previously applied joystick commands | 2 |
-| Current mechanical tracking errors | 4 |
-| Desired mechanical trajectory over the next 400 ms | 160 |
+| Current 22 physical states | 22 |
+| Previous 22 physical states | 22 |
+| Previously applied lift/jib commands | 2 |
+| Four current mechanical reference-tracking errors | 4 |
+| 40 future reference points × four mechanical values | 160 |
 | **Total** | **210** |
 
-The future trajectory information contains 40 reference points, each describing the desired lift angle, jib angle, lift angular velocity and jib angular velocity.
+The four future reference variables are lift angle, jib angle, lift angular velocity and jib angular velocity. The **wide_s44** policy architecture is **210 → 128 → 64 → 2**, with ReLU hidden layers and tanh outputs, and **35,394 trainable parameters**. The two outputs are candidate lift and jib joystick commands. This controller's 210 features are separate from the 48 features used in Stage I dynamics modelling.
 
-This gives the neural network information about both the current crane condition and the movement that should be followed.
+### 5.2 Collect MPC teacher demonstrations and train the policy
 
-### Offline Training Data Generation
+The training entry point `Neural_MPC/train.py` contains **both** teacher generation and policy training. The original MPC400 teacher uses the **same selected 9,916-parameter Compact dynamics, 400 ms cost, joystick limits, five-iteration SLSQP budget and historical warm-start convention**. At each 100 ms MPC update, it records the 210 features and the teacher's optimized **first** lift/jib command pair. The resulting demonstrations are split according to **34 Train recordings for neural fitting** and **nine other Train recordings for validation**; the distinct 11 Test recordings are not used in this process.
 
-The neural network was trained using examples collected from the original MPC400 controller.
-
-This is an offline process performed before the neural-assisted MPC is deployed.
-
-The training procedure works as follows:
-
-1. The original MPC400 controller is run using the designated controller-training recordings.
-2. At every 100 ms control update, the current crane states and desired future reference are collected.
-3. MPC calculates the optimized lift and jib joystick commands.
-4. The 210 input features are constructed from the recorded controller conditions.
-5. The optimized first lift and jib commands are stored as the corresponding training outputs.
-6. The collected input-output examples are used to train the neural network.
-
-The purpose is to teach the neural network to approximate the joystick decisions made by the original MPC controller.
-
-The teacher uses the same frozen Compact dynamics model, original cost function, command limits, five-iteration optimization budget and historical warm-start procedure.
-
-The completed dataset contains:
-
-| Dataset | Number of MPC demonstrations |
+| Demonstration subset | Samples |
 |---|---:|
-| Controller training | 25,644 |
-| Development-validation | 6,644 |
-| **Total** | **32,288** |
+| MPC teacher training examples | 25,644 |
+| Teacher development-validation examples | 6,644 |
+| **Total teacher examples** | **32,288** |
 
-The development-validation demonstrations are used to evaluate neural training performance and are not included in the neural optimization training examples.
+Teacher collection requires tens of thousands of optimizations and can be expensive. The recovered pipeline preserves the historical **previous-second-move warm start** rather than replacing the teacher's decisions with a new zero/hold-initialization convention. The model input/scaler construction also preserves the historical float64/float32 conversion sequence when replaying the original checkpoint.
 
-The separate Test recordings are not used for neural-policy training or checkpoint selection.
-
-### Neural Network Training
-
-The collected MPC demonstrations are used to train the neural command predictor through supervised learning.
-
-The network learns to minimize the difference between its predicted joystick commands and the commands generated by the MPC teacher.
-
-The training configuration is:
-
-| Parameter | Value |
-|---|---|
-| Network architecture | 210 → 128 → 64 → 2 |
-| Trainable parameters | 35,394 |
-| Hidden activation | ReLU |
-| Output activation | Tanh |
-| Optimizer | Adam |
-| Learning rate | 0.001 |
-| Weight decay | 0.00001 |
-| Loss function | Normalized joystick command MSE |
+| Neural-policy training setting | Value |
+|---|---:|
+| Model / parameters | 210 → 128 → 64 → 2 / 35,394 |
+| Loss | Mean squared error of normalized joystick commands |
+| Optimizer / learning rate | Adam / 0.001 |
+| Weight decay | 1e-5 |
 | Batch size | 512 |
-| Maximum epochs | 240 |
-| Early stopping patience | 40 |
-| Gradient clipping | 5 |
+| Max epochs / early-stopping patience | 240 / 40 |
 | Minimum validation improvement | 1e-7 |
-| Selected random seed | 44 |
+| Gradient clipping | 5 |
+| Selected seed | 44 |
+| Reported completed fitting run | 72 epochs |
 
-The original feature normalization and numerical precision convention are preserved to maintain consistency between training and controller deployment.
-
-In the completed reproduction, training stopped after **72 epochs**.
-
-The selected retrained checkpoint matched the original frozen neural policy in its learned parameters and saved scalers under the verified numerical environment.
-
-The original policy checkpoint remains preserved and is the default model used in the final neural-assisted MPC evaluation.
-
-### Training the Neural Command Predictor
-
-The `Neural_MPC/train.py` script performs both MPC teacher-data generation and neural-network training.
-
-To generate the demonstrations and train the network:
+The supplied reproduction report describes the seed-44 retrained policy as **bit-identical** to the original frozen policy in its verified software/numerical environment, including saved scaler tensors. That assertion is a **reported result for that environment**, not a guarantee that new data, another implementation or hardware produces identical weights. The original `wide_s44` checkpoint remains the default; newly fitted files must not overwrite it.
 
 ```powershell
+# Generate MPC teacher decisions and train the 210-input neural policy
 python Neural_MPC/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --seed 44
-```
 
-Because generating the demonstrations requires running the MPC optimizer thousands of times, previously generated and verified demonstrations can also be reused.
-
-To train using existing demonstrations:
-
-```powershell
+# Or train with independently stored, validated teacher demonstrations
 python Neural_MPC/train.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --reuse-demonstrations "D:\PATU_Teacher_Demonstrations" --seed 44
 ```
 
-The training script saves:
+Teacher demonstrations are stored **outside the ZIP**; the reuse path must contain compatible protocol metadata and records. A verified historical-demo fit and a bounded teacher-generation smoke test are not the same as demonstrating a complete fresh 32,288-optimization teacher regeneration.
 
-- Neural policy checkpoint.
-- Associated normalization parameters.
-- Training configuration.
-- Training and validation loss curves.
-- Training results and metadata.
+### 5.3 Final online neural-assisted MPC loop
 
-Newly trained checkpoints are stored separately and do not overwrite the original successful policy.
+At each **100 ms control update**:
 
-### Neural-Assisted MPC Operation
+1. Read the virtual crane's current/previous states, previous joystick pair, current tracking errors, and **400 ms future mechanical reference**.
+2. The neural command predictor outputs **one lift/jib command pair**.
+3. Copy this pair to initialize **both**  MPC move blocks (the first 100 ms, then the remaining 300 ms).
+4. Use the **same MPC400 cost and frozen Compact model** to refine the four planned joystick values with SLSQP, now limited to **three iterations**.
+5. Apply **only the first optimized joystick pair for 100 ms** to the separately advancing learned virtual crane plant.
+6. Observe the updated state and repeat; no future actual plant states are supplied to the controller.
 
-Once the neural command predictor has been trained, it is combined with MPC400.
+The conventional three-iteration MPC is an essential comparison: it gets the same reduced solver budget but starts from the traditional shifted MPC plan rather than the neural suggestion. This separates the benefit of **neural initialization** from the saving due merely to **fewer solver iterations**.
 
-The final controller operates using the following procedure:
+### 5.4 Final controller comparison
 
-1. **Read current conditions:** The controller receives the current and previous crane states, previous joystick commands and future reference trajectory.
+All three controllers were evaluated on the **nine full development-validation recordings** using the same learned-model virtual plant. **Mean tip RMSE** averages the nine per-recording errors. Controller timing was measured **separately**, on **136 identical matched input contexts**, after warm-up, using one CPU thread. The timing columns should not be read as whole-run wall time.
 
-2. **Predict initial commands:** The neural network produces one lift joystick command and one jib joystick command.
-
-3. **Initialize MPC:** The predicted command pair is used as the starting guess for both MPC control blocks.
-
-4. **Predict future movement:** The frozen Compact dynamics model predicts crane movement over the next 400 ms using 40 prediction steps of 10 ms.
-
-5. **Optimize commands:** SLSQP refines the initial plan using the same MPC400 cost function, but with a maximum of three iterations instead of five.
-
-6. **Apply the first command:** The first optimized lift and jib commands are applied to the virtual crane for 100 ms.
-
-7. **Repeat:** After 100 ms, the updated crane states are returned to the controller and the process repeats.
-
-The neural network does not replace MPC. It provides an initial joystick estimate, while MPC performs the final online optimization.
-
-
-### Final Neural-Assisted MPC Results
-
-The final controllers were evaluated using nine complete development-validation recordings in the same frozen Compact virtual crane environment.
-
-Two performance measures were considered:
-
-- **Tracking accuracy:** Mean Cartesian tip-position RMSE across the nine recordings. Lower RMSE means better trajectory tracking.
-- **Computational performance:** Controller execution time measured using 136 identical input conditions. Lower computation time means faster control calculations.
-
-#### Controller Performance Comparison
-
-| Controller | Mean Tip RMSE ↓ | Mean Time ↓ | p99 Time ↓ | RMSE Improvement vs. Original | Computation Savings vs. Original |
+| Controller | Mean tip RMSE ↓ | Mean controller time ↓ | p99 controller time ↓ | RMSE improvement vs original | Mean-time saving vs original |
 |---|---:|---:|---:|---:|---:|
-| Original MPC400 (5 iterations) | 54.75 mm | 43.05 ms | 79.59 ms | Reference (0%) | Reference (0%) |
-| Conventional MPC400 (3 iterations) | 131.20 mm | 27.70 ms | **49.87 ms** | -139.6% | 35.7% |
-| **Neural-Assisted MPC (3 iterations)** | **43.31 mm** | **27.59 ms** | 51.10 ms | **+20.9%** | **35.9%** |
+| Original MPC400 (**5 iterations**) | 54.75 mm | 43.05 ms | 79.59 ms | Reference (0%) | Reference (0%) |
+| Conventional MPC400 (**3 iterations**) | 131.20 mm | 27.70 ms | **49.87 ms** | **−139.6%** | +35.7% |
+| **Neural-assisted MPC (3 iterations)** | **43.31 mm** | **27.59 ms** | 51.10 ms | **+20.9%** | **+35.9%** |
 
-**Lower values are better** for RMSE and computation time. Bold values indicate the best result in each metric.
+**Interpretation:** Neural-assisted MPC achieved **20.9% lower mean tip-position RMSE** and **35.9% less matched average controller time** than original five-iteration MPC400. It improved six of nine recording-level RMSEs. Against *conventional three-iteration MPC*, neural assistance reduced mean RMSE by about **67.0%** with **essentially the same mean computation time** (27.59 versus 27.70 ms). Conventional three-iteration MPC had a marginally better **p99** time (49.87 versus 51.10 ms), and the hybrid's mean final tip-position error was **5.81 mm**, versus **1.72 mm** for original MPC400. The hybrid observed **zero deadline misses among 6,644 closed-loop updates**, but this does not certify hard real-time performance.
 
-The results show that the neural-assisted controller achieved the **lowest mean tracking error and lowest mean computation time** among the three configurations.
+The speed gain relative to five-iteration MPC comes **primarily from reducing SLSQP's iteration budget**; the neural network demonstrably improves tracking accuracy under that smaller budget, but its starting guess was *not* proven to consistently lower the initial objective or accelerate optimizer convergence. **The main contribution is a better accuracy–computation trade-off in a shared-surrogate control study**, not a verified standalone neural controller or physical-crane deployment.
 
+### 5.5 Test the hybrid and save results
 
-The proposed neural-assisted MPC achieved a mean tip-position RMSE of **43.31 mm**, compared with **54.75 mm** for the original MPC400, representing a **20.9% reduction in tracking error**. It also reduced mean computation time from **43.05 ms to 27.59 ms (35.9%)**, while improving tracking on six of nine validation recordings. Compared with conventional three-iteration MPC, which achieved **131.20 mm RMSE**, the neural-assisted controller reduced tracking error by approximately **67.0%** with nearly identical average computation time. Although its p99 computation time was slightly higher (**51.10 ms versus 49.87 ms**) and its mean final tip error increased from **1.72 mm to 5.81 mm**, the hybrid achieved a better overall accuracy–computation trade-off. No deadline misses were observed across **6,644 control updates**. These results demonstrate that neural initialization can improve MPC tracking performance with fewer optimization iterations, although further validation using an independent physical model or real crane is required.
-
-
-
-### Running Neural-Assisted MPC
-
-The `Neural_MPC` folder contains two main scripts:
-
-- `train.py` — Generates MPC demonstrations and trains the neural command predictor.
-- `test.py` — Evaluates original MPC400, conventional three-iteration MPC and neural-assisted MPC.
-
-The testing script loads the original trained neural policy by default.
-
-It performs the complete closed-loop evaluation and generates tracking, joystick and computation results.
-
-All numerical results and figures are saved under:
-
-`Neural_MPC/results/`
-
----
-
-## Test neural-assisted MPC
+`Neural_MPC/test.py` evaluates original five-iteration MPC400, conventional three-iteration MPC, and three-iteration neural-assisted MPC. The historical frozen `wide_s44` policy is the default. To evaluate a separately retrained policy, pass its checkpoint path explicitly.
 
 ```powershell
 python Neural_MPC/test.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --checkpoint original
 python Neural_MPC/test.py --data-root "D:\PATU_Data" --prepared-root "D:\PATU_Cache" --checkpoint Neural_MPC/checkpoints/wide_retrained_s44.pt
 ```
 
-The default compares original MPC400/maxiter5, conventional MPC400/maxiter3 and neural-assisted MPC400/maxiter3 across the complete nine development-validation recordings. The hybrid clips the policy's single command pair to the unchanged bounds, repeats it as both move-block initial guesses, optimizes the unchanged400ms cost and applies only the first100ms command. It **still performs online optimization**. Its separately advanced virtual plant uses the same frozen learned Compact dynamics, not independent physical validation. The standalone optimization-free neural policy was not a reliable replacement in the historical study.
+The test stage prints and saves per-recording and summary tip-position errors, reference-versus-tracked Cartesian paths, angles and angular velocities, joystick time series, solver and saturation information, controller runtime distributions, deadline statistics, and actual numerical output tables. Files are written under `Neural_MPC/results/`. Where applicable the original MPC400 run can be read from the verified cache; use `--recompute` to repeat the optimized runs.
 
-MPC400 baseline arrays are reused from MPC/results/mpc400; the other outputs go under Neural_MPC/results. Explicitly selected retrained-policy evaluations use their own checkpoint-named subfolder. Add `--recompute` to rerun conventional3 and hybrid; the already verified MPC400 baseline is reused. Per-recording metrics and mean/pooled/worst/final/max tracking errors, saturation, solver statistics, controller mean/median/p95/p99/max, deadline misses, virtual-plant times and plots are printed and saved.
+![Neural-assisted Cartesian trajectories](Neural_MPC/results/comparison/trajectory.png)
+![Neural-assisted tip error](Neural_MPC/results/comparison/tip_error.png)
+![Controller accuracy and computation](Neural_MPC/results/comparison/accuracy_computation.png)
 
+## 6. Reproducibility and interpretation
 
-The unique36controller trajectories (MPC200,MPC400,conventional3,hybrid x9recordings) match their previous complete state/command array hashes exactly. Full-run times above are measured, not forced to the earlier matched-context benchmark. Mean recording RMSE weights recordings equally; pooled RMSE weights prediction samples.
+- **Two Compact models are different:** the **4,246-parameter** model is the original **10 µs** four-model candidate; the **9,916-parameter** improved Compact is the selected **10 ms** MPC predictor and shared virtual-plant dynamics model.
+- **Training versus evaluation:** frozen-model testing reproduces existing checkpoints' performance; from-scratch training tests whether a new checkpoint can be produced under the original protocol. A successful three-epoch smoke test does not demonstrate a full historical training reproduction.
+- **Train/validation/Test:** the dynamics and controller training splits use different rules. The nine controller cases are **development-validation**, not an untouched independently held-out final controller Test set. The 11 dynamics Test files were previously examined in the research history.
+- **Short-horizon versus control claims:** the four original models' 50-step rollouts cover **0.5 ms**; the improved control predictor takes **10 ms** steps in 200/400 ms MPC horizons. Their results answer different questions.
+- **Simulation limitation:** both MPC optimization and virtual plant use the same frozen neural dynamics checkpoint. Separate histories do not make them independent models. Generalization to different physical dynamics, loads, sensor noise and real hardware remains to be evaluated.
+- **Timing:** native model kernels and matched controller calculations are measured under particular thread, warm-up, software and hardware conditions. The reported 100 ms control interval and zero observed deadline misses do not establish worst-case hard real-time guarantees.
+
+## 7. Verification status of this document
+
+This README has been edited for clarity, non-repetition, numerically consistent tables and clear separation of experimental stages. **It does not claim an end-to-end rerun was performed during this edit.** Its training configuration, 17-script commands, full-run controller hashes and identical-policy fitting report come from the **supplied newer README**, while the **attached `PATU_Crane_Final_Research.zip` is an older, different layout** containing `src/patu_crane/` and root-level `run_*.py` scripts. That archive provides source-level support for the original model architectures, 48-feature input construction, 10 ms integrated-angle controller model and mean-squared MPC objective, but **cannot validate that the newer 17-script commands, new training entry points and final exported plots currently exist and run**. Verify those against the updated ZIP before publishing or distributing this README.
+
+For questions: Sohaib.Saeed@lut.fi
 
 ![MPC Cartesian trajectories](MPC/results/comparison/trajectory.png)
 ![MPC mechanical states](MPC/results/comparison/mechanical_states.png)
