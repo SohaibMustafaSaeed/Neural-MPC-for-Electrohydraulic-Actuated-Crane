@@ -352,7 +352,7 @@ At each **100 ms control update**:
 5. Apply **only the first optimized joystick pair for 100 ms** to the separately advancing learned virtual crane plant.
 6. Observe the updated state and repeat; no future actual plant states are supplied to the controller.
 
-The conventional three-iteration MPC is an essential comparison: it gets the same reduced solver budget but starts from the traditional shifted MPC plan rather than the neural suggestion. This separates the benefit of **neural initialization** from the saving due merely to **fewer solver iterations**.
+The conventional three-iteration MPC is an essential comparison: it gets the same reduced solver budget but starts from the traditional shifted MPC plan rather than the neural suggestion. This separates the benefit of **neural initialization** from the saving due merely to **fewer solver https://github.com/SohaibMustafaSaeed/Neural-MPC-for-Electrohydraulic-Actuated-Crane/blob/main/README.mditerations**.
 
 #### Conventional Three-Iteration MPC
 
@@ -386,21 +386,6 @@ The test stage prints and saves per-recording and summary tip-position errors, r
 ![Neural-assisted Cartesian trajectories](Neural_MPC/results/comparison/trajectory.png)
 ![Neural-assisted tip error](Neural_MPC/results/comparison/tip_error.png)
 ![Controller accuracy and computation](Neural_MPC/results/comparison/accuracy_computation.png)
-
-## 6. Reproducibility and interpretation
-
-- **Two Compact models are different:** the **4,246-parameter** model is the original **10 µs** four-model candidate; the **9,916-parameter** improved Compact is the selected **10 ms** MPC predictor and shared virtual-plant dynamics model.
-- **Training versus evaluation:** frozen-model testing reproduces existing checkpoints' performance; from-scratch training tests whether a new checkpoint can be produced under the original protocol. A successful three-epoch smoke test does not demonstrate a full historical training reproduction.
-- **Train/validation/Test:** the dynamics and controller training splits use different rules. The nine controller cases are **development-validation**, not an untouched independently held-out final controller Test set. The 11 dynamics Test files were previously examined in the research history.
-- **Short-horizon versus control claims:** the four original models' 50-step rollouts cover **0.5 ms**; the improved control predictor takes **10 ms** steps in 200/400 ms MPC horizons. Their results answer different questions.
-- **Simulation limitation:** both MPC optimization and virtual plant use the same frozen neural dynamics checkpoint. Separate histories do not make them independent models. Generalization to different physical dynamics, loads, sensor noise and real hardware remains to be evaluated.
-- **Timing:** native model kernels and matched controller calculations are measured under particular thread, warm-up, software and hardware conditions. The reported 100 ms control interval and zero observed deadline misses do not establish worst-case hard real-time guarantees.
-
-## 7. Verification status of this document
-
-This README has been edited for clarity, non-repetition, numerically consistent tables and clear separation of experimental stages. **It does not claim an end-to-end rerun was performed during this edit.** Its training configuration, 17-script commands, full-run controller hashes and identical-policy fitting report come from the **supplied newer README**, while the **attached `PATU_Crane_Final_Research.zip` is an older, different layout** containing `src/patu_crane/` and root-level `run_*.py` scripts. That archive provides source-level support for the original model architectures, 48-feature input construction, 10 ms integrated-angle controller model and mean-squared MPC objective, but **cannot validate that the newer 17-script commands, new training entry points and final exported plots currently exist and run**. Verify those against the updated ZIP before publishing or distributing this README.
-
-For questions: Sohaib.Saeed@lut.fi
 
 
 
