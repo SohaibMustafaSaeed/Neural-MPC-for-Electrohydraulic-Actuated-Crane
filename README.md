@@ -44,8 +44,7 @@ thetalift[rad], plinepistonjib[Pa], plinerodjib[Pa], ppistonjib[Pa],
 prodjib[Pa], thetajib[rad], thetaliftdot[rad/s], thetajibdot[rad/s]
 ```
 
-Two different data partitions serve different purposes. For **dynamics training**, the first **90% of each of the 43 Train recordings** supplies training samples, and the last **10%** supplies validation samples. For **neural-controller training**, **34 complete Train recordings** supply MPC demonstrations and **nine other Train recordings** supply development-validation cases (IDs `05, 08, 10, 13, 18, 22, 37, 39, 40`). The **11 Test recordings** are not used to fit scalers or train/select checkpoints in the described reproduction. They were examined earlier in the research history, so they should not be characterized as a newly untouched external dataset.
-
+Two different data partitions serve different purposes. For **dynamics training**, the first **90% of each of the 43 Train recordings** supplies training samples, and the last **10%** supplies validation samples. For **neural-controller training**, **34 complete Train recordings** supply MPC demonstrations and **nine other Train recordings** supply development-validation cases (IDs `05, 08, 10, 13, 18, 22, 37, 39, 40`). The **11 Test recordings** are not used to fit scalers or train/select checkpoints in the described reproduction. 
 ## 2. Stage I — Four neural dynamics models
 
 ### 2.1 Preprocessing and the 48 input features
