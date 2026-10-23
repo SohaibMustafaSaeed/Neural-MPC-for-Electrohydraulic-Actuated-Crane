@@ -402,11 +402,7 @@ This README has been edited for clarity, non-repetition, numerically consistent 
 
 For questions: Sohaib.Saeed@lut.fi
 
-![MPC Cartesian trajectories](MPC/results/comparison/trajectory.png)
-![MPC mechanical states](MPC/results/comparison/mechanical_states.png)
-![Neural-assisted Cartesian trajectories](Neural_MPC/results/comparison/trajectory.png)
-![Neural-assisted tip error](Neural_MPC/results/comparison/tip_error.png)
-![Controller accuracy/computation](Neural_MPC/results/comparison/accuracy_computation.png)
+
 
 For questions contact:
 Sohaib.Saeed@lut.fi
