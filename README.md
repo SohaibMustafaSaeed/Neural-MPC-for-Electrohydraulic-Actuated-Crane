@@ -355,6 +355,10 @@ At each **100 ms control update**:
 
 The conventional three-iteration MPC is an essential comparison: it gets the same reduced solver budget but starts from the traditional shifted MPC plan rather than the neural suggestion. This separates the benefit of **neural initialization** from the saving due merely to **fewer solver iterations**.
 
+#### Conventional Three-Iteration MPC
+
+To evaluate the contribution of neural initialization, a conventional three-iteration MPC controller was included as a comparison. It uses the same 400 ms prediction horizon, Compact dynamics model, cost function, and joystick constraints as the original MPC400, but reduces the maximum SLSQP iterations from five to three. Unlike neural-assisted MPC, it initializes optimization using the previous MPC command plan rather than neural-network predictions. This comparison helps determine whether the improvement comes from neural initialization or simply reducing the number of optimization iterations.
+
 ### 5.4 Final controller comparison
 
 All three controllers were evaluated on the **nine full development-validation recordings** using the same learned-model virtual plant. **Mean tip RMSE** averages the nine per-recording errors. Controller timing was measured **separately**, on **136 identical matched input contexts**, after warm-up, using one CPU thread. The timing columns should not be read as whole-run wall time.
